@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Multipart Response Example</title>
+</head>
+<body>
+  <h2>JSON Data</h2>
+  <pre id="json-output"></pre>
+
+  <h2>Image</h2>
+  <img id="image-output" alt="Loaded from backend" />
+
+  <script>
+    async function fetchMultipartData() {
+      const response = await fetch('<host_address>/multipart-data');
+
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.startsWith('multipart/form-data')) {
+        console.error('Unexpected content type:', contentType);
+        return;
+      }
+
+      // Extract boundary from content-type header
+      const boundary = contentType.split('boundary=')[1];
+      const rawData = await response.arrayBuffer();
+      const decoder = new TextDecoder('utf-8');
+
+      // Convert to Uint8Array for easier parsing
+      const dataView = new Uint8Array(rawData);
+      const textData = decoder.decode(dataView);
+
+      // Split parts by boundary
+      const parts = textData.split(`--${boundary}`);
+
+      let jsonData = null;
+      let imageBlob = null;
+
+      for (const part of parts) {
+        if (part.includes('Content-Type: application/json') || part.includes('name="json_data"')) {
+          const jsonMatch = part.match(/{.*}/s);
+          if (jsonMatch) {
+            jsonData = JSON.parse(jsonMatch[0]);
+          }
+        }
+
+        if (part.includes('Content-Type: image/png') || part.includes('name="image_data"')) {
+          const index = textData.indexOf(part);
+          const start = index + part.indexOf('\r\n\r\n') + 4;
+          const end = textData.indexOf(`--${boundary}`, start);
+          const imageArray = dataView.slice(start, end - 2); // -2 to remove \r\n
+          imageBlob = new Blob([imageArray], { type: 'image/png' });
+        }
+      }
+
+      if (jsonData) {
+        document.getElementById('json-output').textContent = JSON.stringify(jsonData, null, 2);
+      }
+
+      if (imageBlob) {
+        const imageUrl = URL.createObjectURL(imageBlob);
+        document.getElementById('image-output').src = imageUrl;
+      }
+    }
+
+    fetchMultipartData();
+  </script>
+</body>
+</html>
