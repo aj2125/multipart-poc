@@ -36,7 +36,7 @@ public class MultipartResponseController {
         String jsonString = objectMapper.writeValueAsString(jsonData);
 
         // Image data (replace with your image path)
-        String imagePath = "test-data/image1.png";  // Change this to the actual image path
+        String imagePath = "test-data/image2.png";  // Change this to the actual image path
 
         File file = ResourceUtils.getFile("classpath:"+imagePath);
         byte[] imageBytes = Files.readAllBytes(file.toPath());
@@ -45,7 +45,7 @@ public class MultipartResponseController {
         ByteArrayResource imageResource = new ByteArrayResource(imageBytes) {
             @Override
             public String getFilename() {
-                return "test-data/image1.png"; // Optional, specify filename if needed
+                return "test-data/image2.png"; // Optional, specify filename if needed
             }
         };
 
