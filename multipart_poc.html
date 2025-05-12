@@ -13,7 +13,7 @@
 
   <script>
     async function fetchMultipartData() {
-      const response = await fetch('<host_address>/multipart-data');
+      const response = await fetch('http://100.118.112.252:8080/multipart-data');
 
       const contentType = response.headers.get('content-type');
       if (!contentType || !contentType.startsWith('multipart/form-data')) {
