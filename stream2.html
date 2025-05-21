@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Progressive JPEG with JSON Metadata</title>
+  <style>
+    img {
+      max-width: 100%;
+      height: auto;
+      display: block;
+    }
+    pre {
+      background: #f4f4f4;
+      padding: 1em;
+      border: 1px solid #ccc;
+    }
+  </style>
+</head>
+<body>
+  <h1>Progressive JPEG with JSON Metadata</h1>
+  <img id="progressive-image" alt="Progressive JPEG" />
+  <h2>Metadata</h2>
+  <pre id="json-data">Loading...</pre>
+
+  <script>
+    async function fetchMultipartData() {
+      const response = await fetch('http://localhost:3000/stream-image');
+      const contentType = response.headers.get('Content-Type');
+      const boundaryMatch = contentType.match(/boundary=(.*)$/);
+      if (!boundaryMatch) {
+        console.error('No boundary in Content-Type');
+        return;
+      }
+      const boundary = boundaryMatch[1];
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder('utf-8');
+      let buffer = '';
+      let done = false;
+
+      while (!done) {
+        const { value, done: readerDone } = await reader.read();
+        done = readerDone;
+        buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
+        let boundaryIndex;
+        while ((boundaryIndex = buffer.indexOf('--' + boundary)) !== -1) {
+          const part = buffer.slice(0, boundaryIndex);
+          buffer = buffer.slice(boundaryIndex + boundary.length + 2); // Skip boundary and CRLF
+          if (part.includes('Content-Type: application/json')) {
+            const jsonStart = part.indexOf('\r\n\r\n') + 4;
+            const jsonString = part.slice(jsonStart).trim();
+            try {
+              const jsonData = JSON.parse(jsonString);
+              document.getElementById('json-data').textContent = JSON.stringify(jsonData, null, 2);
+            } catch (e) {
+              console.error('Failed to parse JSON:', e);
+            }
+          } else if (part.includes('Content-Type: image/jpeg')) {
+            const imageStart = part.indexOf('\r\n\r\n') + 4;
+            const imageData = part.slice(imageStart).trim();
+            const byteCharacters = atob(imageData);
+            const byteNumbers = new Array(byteCharacters.length);
+            for (let i = 0; i < byteCharacters.length; i++) {
+              byteNumbers[i] = byteCharacters.charCodeAt(i);
+            }
+            const byteArray = new Uint8Array(byteNumbers);
+            const blob = new Blob([byteArray], { type: 'image/jpeg' });
+            const imageUrl = URL.createObjectURL(blob);
+            document.getElementById('progressive-image').src = imageUrl;
+          }
+        }
+      }
+    }
+
+    fetchMultipartData().catch(console.error);
+  </script>
+</body>
+</html>
