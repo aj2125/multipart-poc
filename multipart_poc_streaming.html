@@ -1,78 +1,98 @@
-<script>
-  async function fetchMultipartDataProgressive() {
-    const response = await fetch('http://100.118.112.252:8080/multipart-data');
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Progressive Image Streaming</title>
+  <style>
+    body { font-family: sans-serif; line-height: 1.5; padding: 1rem; }
+    img { max-width: 400px; border: 1px solid #ccc; margin-top: 1rem; }
+    pre { background: #f7f7f7; padding: 1rem; border: 1px solid #ddd; }
+  </style>
+</head>
+<body>
+  <h2>JSON Data</h2>
+  <pre id="json-output">Waiting for JSON...</pre>
 
-    const contentType = response.headers.get('content-type');
-    if (!contentType || !contentType.includes('multipart')) {
-      console.error('Unexpected content type:', contentType);
-      return;
-    }
+  <h2>Image</h2>
+  <img id="image-output" alt="Streaming image..." />
 
-    const boundary = '--' + contentType.split('boundary=')[1];
-    const decoder = new TextDecoder();
-    const reader = response.body.getReader();
+  <script>
+    async function fetchMultipartDataProgressive() {
+      const response = await fetch('http://100.118.112.252:8080/multipart-data');
 
-    let buffer = '';
-    let imageChunks = [];
-    let imageBytesSoFar = 0;
-    let jsonShown = false;
-    let collectingImage = false;
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('multipart')) {
+        console.error('Unexpected content type:', contentType);
+        return;
+      }
 
-    function updateImage() {
-      const blob = new Blob(imageChunks, { type: 'image/png' });
-      const url = URL.createObjectURL(blob);
-      document.getElementById('image-output').src = url;
-    }
+      const boundary = '--' + contentType.split('boundary=')[1];
+      const decoder = new TextDecoder();
+      const reader = response.body.getReader();
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
+      let buffer = '';
+      let imageChunks = [];
+      let imageBytesSoFar = 0;
+      let jsonShown = false;
+      let collectingImage = false;
 
-      const chunkText = decoder.decode(value, { stream: true });
-      buffer += chunkText;
+      function updateImage() {
+        const blob = new Blob(imageChunks, { type: 'image/png' });
+        const url = URL.createObjectURL(blob);
+        document.getElementById('image-output').src = url;
+      }
 
-      // Show JSON early
-      if (!jsonShown && buffer.includes('application/json')) {
-        const jsonStart = buffer.indexOf('\r\n\r\n') + 4;
-        const jsonEnd = buffer.indexOf(boundary, jsonStart);
-        const jsonStr = buffer.substring(jsonStart, jsonEnd).trim();
-        try {
-          const jsonData = JSON.parse(jsonStr);
-          document.getElementById('json-output').textContent = JSON.stringify(jsonData, null, 2);
-          jsonShown = true;
-        } catch (e) {
-          // not ready yet
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunkText = decoder.decode(value, { stream: true });
+        buffer += chunkText;
+
+        // Show JSON early
+        if (!jsonShown && buffer.includes('application/json')) {
+          const jsonStart = buffer.indexOf('\r\n\r\n') + 4;
+          const jsonEnd = buffer.indexOf(boundary, jsonStart);
+          const jsonStr = buffer.substring(jsonStart, jsonEnd).trim();
+          try {
+            const jsonData = JSON.parse(jsonStr);
+            document.getElementById('json-output').textContent = JSON.stringify(jsonData, null, 2);
+            jsonShown = true;
+          } catch (e) {
+            // Not complete yet
+          }
+        }
+
+        // Detect start of image
+        if (!collectingImage && buffer.includes('Content-Type: image/png')) {
+          collectingImage = true;
+          const splitAt = buffer.indexOf('\r\n\r\n') + 4;
+          const leftover = buffer.slice(splitAt);
+          const leftoverBytes = new TextEncoder().encode(leftover);
+          imageChunks.push(leftoverBytes);
+          imageBytesSoFar += leftoverBytes.length;
+          buffer = '';
+          continue;
+        }
+
+        // Stream image
+        if (collectingImage) {
+          imageChunks.push(value);
+          imageBytesSoFar += value.length;
+
+          // Preview every 100 KB
+          if (imageBytesSoFar >= 100 * 1024) {
+            updateImage();
+            imageBytesSoFar = 0;
+          }
         }
       }
 
-      // Detect start of image
-      if (!collectingImage && buffer.includes('Content-Type: image/png')) {
-        collectingImage = true;
-        const splitAt = buffer.indexOf('\r\n\r\n') + 4;
-        const leftover = buffer.slice(splitAt);
-        const leftoverBytes = new TextEncoder().encode(leftover);
-        imageChunks.push(leftoverBytes);
-        imageBytesSoFar += leftoverBytes.length;
-        buffer = '';
-        continue;
-      }
-
-      // Stream image
-      if (collectingImage) {
-        imageChunks.push(value);
-        imageBytesSoFar += value.length;
-
-        // Show preview every 100 KB
-        if (imageBytesSoFar >= 100 * 1024) {
-          updateImage();
-          imageBytesSoFar = 0;
-        }
-      }
+      // Final image rendering
+      if (imageChunks.length) updateImage();
     }
 
-    // Final image rendering
-    if (imageChunks.length) updateImage();
-  }
-
-  fetchMultipartDataProgressive();
-</script>
+    fetchMultipartDataProgressive();
+  </script>
+</body>
+</html>
