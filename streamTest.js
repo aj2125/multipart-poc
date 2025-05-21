@@ -28,3 +28,15 @@ fetch('http://localhost:8080/test-chunks')
       });
     })();
   });
+
+
+try (InputStream in = new FileInputStream("your_big_image.jpg")) {
+    byte[] buffer = new byte[1024];
+    int bytesRead;
+    while ((bytesRead = in.read(buffer)) != -1) {
+        out.write(buffer, 0, bytesRead);
+        out.flush(); // force delivery
+        Thread.sleep(100); // simulate chunked progression
+    }
+}
+
