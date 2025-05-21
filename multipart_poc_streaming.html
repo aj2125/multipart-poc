@@ -2,24 +2,29 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Progressive JPEG Streaming with Logs</title>
+  <title>Progressive JPEG Streaming with Logs + Download</title>
   <style>
     body { font-family: sans-serif; padding: 1rem; }
     img { max-width: 500px; border: 1px solid #ccc; margin-top: 1rem; }
-    pre { background: #f4f4f4; padding: 1rem; border: 1px solid #ccc; white-space: pre-wrap; }
+    pre { background: #f4f4f4; padding: 1rem; border: 1px solid #ccc; }
+    button { margin-top: 1rem; padding: 0.5rem 1rem; }
   </style>
 </head>
 <body>
   <h2>JSON Data</h2>
   <pre id="json-output">Waiting...</pre>
 
-  <h2>Image Stream (Progressive JPEG)</h2>
+  <h2>Progressive JPEG Image</h2>
   <img id="image-output" alt="Streaming image..." />
+
+  <button id="download-btn" style="display:none;">Download Assembled Image</button>
 
   <h2>Console Logs</h2>
   <pre id="log-output"></pre>
 
   <script>
+    let finalBlob = null;
+
     async function fetchStreamingMultipartJPEG() {
       const response = await fetch("http://localhost:8080/multipart-data");
       const contentType = response.headers.get("content-type");
@@ -46,10 +51,10 @@
       let serverReportedSize = null;
 
       function updateImage() {
-        const blob = new Blob(imageChunks, { type: "image/jpeg" });
-        const url = URL.createObjectURL(blob);
+        finalBlob = new Blob(imageChunks, { type: "image/jpeg" });
+        const url = URL.createObjectURL(finalBlob);
         document.getElementById("image-output").src = url;
-        log(`🔄 updateImage() called — blob size: ${blob.size} bytes`);
+        log(`🔄 updateImage() called — blob size: ${finalBlob.size} bytes`);
       }
 
       while (true) {
@@ -85,7 +90,7 @@
             const headerEnd = buffer.indexOf("\r\n\r\n") + 4;
             const headerText = buffer.slice(0, headerEnd);
             const headerByteLength = new TextEncoder().encode(headerText).length;
-            const leftoverBytes = value.slice(headerByteLength); // binary-safe
+            const leftoverBytes = value.slice(headerByteLength); // ✅ actual binary
             imageChunks.push(leftoverBytes);
             imageBytesSoFar += leftoverBytes.length;
             log(`🧩 First image bytes after header: ${leftoverBytes.length}`);
@@ -94,10 +99,8 @@
             updateImage();
           }
         } else {
-          // Streaming binary JPEG chunks
           imageChunks.push(value);
           imageBytesSoFar += value.length;
-
           if (imageBytesSoFar >= 100 * 1024) {
             updateImage();
             imageBytesSoFar = 0;
@@ -107,13 +110,25 @@
 
       if (imageChunks.length > 0) {
         updateImage();
-        const totalImageBytes = imageChunks.reduce((acc, chunk) => acc + chunk.length, 0);
-        log(`✅ Final image complete — total bytes received: ${totalImageBytes}`);
+        const totalReceived = imageChunks.reduce((a, b) => a + b.length, 0);
+        log(`✅ Streaming complete — total image bytes: ${totalReceived}`);
         if (serverReportedSize !== null) {
-          log(`🔍 Size match: ${serverReportedSize === totalImageBytes ? "✔️ yes" : "❌ no"}`);
+          log(`🔍 Size match: ${serverReportedSize === totalReceived ? "✔️ yes" : `❌ no (expected ${serverReportedSize})`}`);
         }
+
+        // ✅ Show download button
+        document.getElementById("download-btn").style.display = "inline-block";
       }
     }
+
+    // ✅ Download logic
+    document.getElementById("download-btn").addEventListener("click", () => {
+      if (!finalBlob) return;
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(finalBlob);
+      a.download = "streamed-image.jpg";
+      a.click();
+    });
 
     fetchStreamingMultipartJPEG();
   </script>
