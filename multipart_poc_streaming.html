@@ -2,84 +2,84 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Streaming Multipart Form Data Viewer</title>
+  <title>Progressive JPEG Streaming</title>
   <style>
     body { font-family: sans-serif; line-height: 1.5; padding: 1rem; }
-    img { max-width: 400px; border: 1px solid #ccc; margin-top: 1rem; }
+    img { max-width: 500px; border: 1px solid #ccc; margin-top: 1rem; }
     pre { background: #f7f7f7; padding: 1rem; border: 1px solid #ddd; }
   </style>
 </head>
 <body>
   <h2>JSON Data</h2>
-  <pre id="json-output">Waiting for JSON...</pre>
+  <pre id="json-output">Waiting...</pre>
 
-  <h2>Image (Progressive Streaming)</h2>
+  <h2>Progressive JPEG Image</h2>
   <img id="image-output" alt="Loading image..." />
 
   <script>
-    async function fetchStreamingFormData() {
-      const response = await fetch('http://localhost:8080/multipart-data');
-      const contentType = response.headers.get('content-type');
+    async function fetchStreamingMultipartJPEG() {
+      const response = await fetch("http://localhost:8080/multipart-data");
+      const contentType = response.headers.get("content-type");
 
-      if (!contentType.includes('multipart/form-data')) {
+      if (!contentType.includes("multipart/form-data")) {
         console.error("Unexpected content type", contentType);
         return;
       }
 
-      const boundary = '--' + contentType.split('boundary=')[1];
+      const boundary = "--" + contentType.split("boundary=")[1];
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
-
-      let buffer = '';
+      let buffer = "";
+      let state = "json";
+      let jsonDone = false;
       let imageChunks = [];
       let imageBytesSoFar = 0;
-      let state = 'json';
 
       function updateImage() {
-        const blob = new Blob(imageChunks, { type: 'image/jpeg' });
+        const blob = new Blob(imageChunks, { type: "image/jpeg" });
         const url = URL.createObjectURL(blob);
-        document.getElementById('image-output').src = url;
+        document.getElementById("image-output").src = url;
       }
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
 
-        if (state !== 'stream-image') {
+        if (state !== "stream-image") {
           const chunkText = decoder.decode(value, { stream: true });
           buffer += chunkText;
 
           while (true) {
-            if (state === 'json' && buffer.includes('name="json_data"')) {
-              const jsonStart = buffer.indexOf('\r\n\r\n') + 4;
-              const jsonEnd = buffer.indexOf(boundary, jsonStart);
-              const jsonStr = buffer.substring(jsonStart, jsonEnd).trim();
+            if (!jsonDone && buffer.includes('name="json_data"')) {
+              const start = buffer.indexOf("\r\n\r\n") + 4;
+              const end = buffer.indexOf(boundary, start);
+              const jsonStr = buffer.substring(start, end).trim();
               try {
                 const json = JSON.parse(jsonStr);
-                document.getElementById('json-output').textContent = JSON.stringify(json, null, 2);
-              } catch (e) {
-                console.error("Invalid JSON:", jsonStr);
+                document.getElementById("json-output").textContent = JSON.stringify(json, null, 2);
+                jsonDone = true;
+                buffer = buffer.slice(end);
+              } catch {
+                break;
               }
-              buffer = buffer.slice(jsonEnd);
-              state = 'image-header';
-              continue;
             }
 
-            if (state === 'image-header' && buffer.includes('name="image_data"')) {
-              const headerEnd = buffer.indexOf('\r\n\r\n') + 4;
+            if (jsonDone && buffer.includes('name="image_data"')) {
+              const headerEnd = buffer.indexOf("\r\n\r\n") + 4;
               const leftover = buffer.slice(headerEnd);
               const leftoverBytes = new TextEncoder().encode(leftover);
               imageChunks.push(leftoverBytes);
               imageBytesSoFar += leftoverBytes.length;
-              buffer = '';
-              state = 'stream-image';
+              buffer = "";
+              state = "stream-image";
+              updateImage();
               break;
             }
 
             break;
           }
         } else {
-          // Binary streaming mode
+          // In binary streaming mode
           imageChunks.push(value);
           imageBytesSoFar += value.length;
 
@@ -93,7 +93,7 @@
       if (imageChunks.length > 0) updateImage();
     }
 
-    fetchStreamingFormData();
+    fetchStreamingMultipartJPEG();
   </script>
 </body>
 </html>
