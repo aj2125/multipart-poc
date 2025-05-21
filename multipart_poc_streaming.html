@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Progressive JPEG Streaming</title>
+  <title>Progressive JPEG Streaming with JSON</title>
   <style>
     body { font-family: sans-serif; line-height: 1.5; padding: 1rem; }
     img { max-width: 500px; border: 1px solid #ccc; margin-top: 1rem; }
@@ -14,7 +14,7 @@
   <pre id="json-output">Waiting...</pre>
 
   <h2>Progressive JPEG Image</h2>
-  <img id="image-output" alt="Loading image..." />
+  <img id="image-output" alt="Streaming image..." />
 
   <script>
     async function fetchStreamingMultipartJPEG() {
@@ -31,7 +31,6 @@
       const decoder = new TextDecoder();
       let buffer = "";
       let state = "json";
-      let jsonDone = false;
       let imageChunks = [];
       let imageBytesSoFar = 0;
 
@@ -49,37 +48,35 @@
           const chunkText = decoder.decode(value, { stream: true });
           buffer += chunkText;
 
-          while (true) {
-            if (!jsonDone && buffer.includes('name="json_data"')) {
-              const start = buffer.indexOf("\r\n\r\n") + 4;
-              const end = buffer.indexOf(boundary, start);
-              const jsonStr = buffer.substring(start, end).trim();
+          // ✅ Safe JSON parsing with regex
+          if (state === "json" && buffer.includes('name="json_data"')) {
+            const jsonMatch = buffer.match(/name="json_data"[\s\S]+?Content-Type:\s*application\/json\r\n\r\n([\s\S]+?)\r\n--/);
+            if (jsonMatch && jsonMatch[1]) {
               try {
+                const jsonStr = jsonMatch[1].trim();
                 const json = JSON.parse(jsonStr);
                 document.getElementById("json-output").textContent = JSON.stringify(json, null, 2);
-                jsonDone = true;
-                buffer = buffer.slice(end);
-              } catch {
-                break;
+                buffer = buffer.slice(buffer.indexOf('name="image_data"')); // move ahead
+                state = "image-header";
+              } catch (e) {
+                console.error("Invalid JSON:", e);
               }
             }
+          }
 
-            if (jsonDone && buffer.includes('name="image_data"')) {
-              const headerEnd = buffer.indexOf("\r\n\r\n") + 4;
-              const leftover = buffer.slice(headerEnd);
-              const leftoverBytes = new TextEncoder().encode(leftover);
-              imageChunks.push(leftoverBytes);
-              imageBytesSoFar += leftoverBytes.length;
-              buffer = "";
-              state = "stream-image";
-              updateImage();
-              break;
-            }
-
-            break;
+          // Detect image part
+          if (state === "image-header" && buffer.includes('name="image_data"')) {
+            const headerEnd = buffer.indexOf("\r\n\r\n") + 4;
+            const leftover = buffer.slice(headerEnd);
+            const leftoverBytes = new TextEncoder().encode(leftover);
+            imageChunks.push(leftoverBytes);
+            imageBytesSoFar += leftoverBytes.length;
+            buffer = "";
+            state = "stream-image";
+            updateImage();
           }
         } else {
-          // In binary streaming mode
+          // Binary streaming mode
           imageChunks.push(value);
           imageBytesSoFar += value.length;
 
