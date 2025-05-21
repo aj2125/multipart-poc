@@ -2,97 +2,98 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Safe Multipart Image Streaming + Download</title>
+  <title>Progressive JPEG with JSON Metadata</title>
   <style>
-    body { font-family: sans-serif; padding: 1rem; }
-    img { max-width: 500px; border: 1px solid #ccc; margin-top: 1rem; }
-    pre { background: #f4f4f4; padding: 1rem; border: 1px solid #ccc; }
-    button { margin-top: 1rem; padding: 0.5rem 1rem; }
+    img {
+      max-width: 100%;
+      height: auto;
+      display: block;
+    }
+    pre {
+      background: #f4f4f4;
+      padding: 1em;
+      border: 1px solid #ccc;
+    }
+    #download-button {
+      margin-top: 1em;
+      padding: 0.5em 1em;
+      font-size: 1em;
+    }
   </style>
 </head>
 <body>
-  <h2>JSON Data</h2>
-  <pre id="json-output">Waiting...</pre>
-
-  <h2>Image Stream</h2>
-  <img id="image-output" alt="Streaming image..." />
-  <br />
-  <button id="download-btn" style="display:none;">Download Image</button>
-
-  <h2>Console Logs</h2>
-  <pre id="log-output"></pre>
+  <h1>Progressive JPEG with JSON Metadata</h1>
+  <img id="progressive-image" alt="Progressive JPEG" />
+  <h2>Metadata</h2>
+  <pre id="json-data">Loading...</pre>
+  <button id="download-button" disabled>Download Image</button>
 
   <script>
-    const log = (...args) => {
-      console.log(...args);
-      document.getElementById("log-output").textContent += args.join(" ") + "\n";
-    };
-
-    let finalBlob = null;
-
-    async function fetchAndParseMultipart() {
-      const response = await fetch("http://localhost:8080/multipart-data");
-      const contentType = response.headers.get("content-type");
-
-      if (!contentType.includes("multipart/form-data")) {
-        log("Unexpected content type:", contentType);
+    async function fetchMultipartData() {
+      const response = await fetch('http://localhost:3000/stream-image');
+      const contentType = response.headers.get('Content-Type');
+      const boundaryMatch = contentType.match(/boundary=(.*)$/);
+      if (!boundaryMatch) {
+        console.error('No boundary in Content-Type');
         return;
       }
+      const boundary = boundaryMatch[1];
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder('utf-8');
+      let buffer = '';
+      let done = false;
+      let imageBlob = null;
 
-      const boundary = '--' + contentType.split("boundary=")[1];
-      const rawBuffer = await response.arrayBuffer();
-      const data = new Uint8Array(rawBuffer);
-      const text = new TextDecoder().decode(data);
+      while (!done) {
+        const { value, done: readerDone } = await reader.read();
+        done = readerDone;
+        const chunkText = decoder.decode(value || new Uint8Array(), { stream: !done });
+        buffer += chunkText;
+        console.log(`Received chunk of ${chunkText.length} characters`);
 
-      const parts = text.split(boundary).filter(p => p.trim() && p.trim() !== "--");
-
-      let imageStart = 0;
-      let imageEnd = data.length;
-      let jsonParsed = false;
-
-      for (const part of parts) {
-        if (part.includes('name="json_data"')) {
-          const jsonMatch = part.match(/\\r\\n\\r\\n([\\s\\S]*)\\r\\n--/);
-          if (jsonMatch && jsonMatch[1]) {
-            const json = JSON.parse(jsonMatch[1].trim());
-            document.getElementById("json-output").textContent = JSON.stringify(json, null, 2);
-            log("✅ JSON parsed:", JSON.stringify(json));
+        let boundaryIndex;
+        while ((boundaryIndex = buffer.indexOf('--' + boundary)) !== -1) {
+          const part = buffer.slice(0, boundaryIndex);
+          buffer = buffer.slice(boundaryIndex + boundary.length + 2); // Skip boundary and CRLF
+          if (part.includes('Content-Type: application/json')) {
+            const jsonStart = part.indexOf('\r\n\r\n') + 4;
+            const jsonString = part.slice(jsonStart).trim();
+            try {
+              const jsonData = JSON.parse(jsonString);
+              document.getElementById('json-data').textContent = JSON.stringify(jsonData, null, 2);
+            } catch (e) {
+              console.error('Failed to parse JSON:', e);
+            }
+          } else if (part.includes('Content-Type: image/jpeg')) {
+            const imageStart = part.indexOf('\r\n\r\n') + 4;
+            const imageData = part.slice(imageStart).trim();
+            const byteCharacters = atob(imageData);
+            const byteNumbers = new Array(byteCharacters.length);
+            for (let i = 0; i < byteCharacters.length; i++) {
+              byteNumbers[i] = byteCharacters.charCodeAt(i);
+            }
+            const byteArray = new Uint8Array(byteNumbers);
+            imageBlob = new Blob([byteArray], { type: 'image/jpeg' });
+            const imageUrl = URL.createObjectURL(imageBlob);
+            document.getElementById('progressive-image').src = imageUrl;
+            document.getElementById('download-button').disabled = false;
           }
-        }
-
-        if (part.includes('name="image_data"')) {
-          // Locate exact byte range of this part in original binary
-          const partIndexInText = text.indexOf(part);
-          const headerEndInPart = part.indexOf("\r\n\r\n") + 4;
-
-          const textBeforeImage = text.slice(0, partIndexInText + headerEndInPart);
-          imageStart = new TextEncoder().encode(textBeforeImage).length;
-
-          const endBoundaryIndex = text.indexOf(boundary, partIndexInText + headerEndInPart);
-          const textUntilNextBoundary = text.slice(0, endBoundaryIndex);
-          imageEnd = new TextEncoder().encode(textUntilNextBoundary).length;
-
-          log(`📍 Image bytes: start=${imageStart}, end=${imageEnd}, size=${imageEnd - imageStart}`);
         }
       }
 
-      const imageBytes = data.slice(imageStart, imageEnd);
-      finalBlob = new Blob([imageBytes], { type: "image/jpeg" }); // or image/png
-      const url = URL.createObjectURL(finalBlob);
-      document.getElementById("image-output").src = url;
-      document.getElementById("download-btn").style.display = "inline-block";
-      log(`✅ Image reconstructed. Blob size: ${finalBlob.size} bytes`);
+      document.getElementById('download-button').addEventListener('click', () => {
+        if (imageBlob) {
+          const link = document.createElement('a');
+          link.href = URL.createObjectURL(imageBlob);
+          link.download = 'downloaded-image.jpg';
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+        }
+      });
     }
 
-    document.getElementById("download-btn").addEventListener("click", () => {
-      if (!finalBlob) return;
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(finalBlob);
-      a.download = "streamed-image.jpg";
-      a.click();
-    });
-
-    fetchAndParseMultipart();
+    fetchMultipartData().catch(console.error);
   </script>
 </body>
 </html>
