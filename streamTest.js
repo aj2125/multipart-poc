@@ -19,3 +19,17 @@ fetch("http://localhost:8080/stream-multipart")
 
     return readChunk();
   });
+
+
+fetch("http://localhost:8080/spring-stream")
+  .then(res => res.body.getReader())
+  .then(reader => {
+    const decoder = new TextDecoder();
+    return (function read() {
+      return reader.read().then(({ done, value }) => {
+        if (done) return console.log("✅ Done.");
+        console.log("⏬ Chunk received:", decoder.decode(value));
+        return read();
+      });
+    })();
+  });
