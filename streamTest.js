@@ -1,34 +1,29 @@
-fetch("http://localhost:8080/stream-multipart")
-  .then(response => {
-    console.log("✅ Got 200 response — beginning to stream...");
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder("utf-8");
+@GetMapping("/test-chunks")
+public void testChunks(HttpServletResponse response) throws IOException {
+    response.setHeader("Transfer-Encoding", "chunked");
+    response.setContentType("text/plain");
 
-    function readChunk() {
-      return reader.read().then(({ done, value }) => {
-        if (done) {
-          console.log("✅ Stream finished.");
-          return;
-        }
+    ServletOutputStream out = response.getOutputStream();
 
-        const chunk = decoder.decode(value, { stream: true });
-        console.log("⏬ Chunk received:", chunk);
-        return readChunk();
-      });
+    for (int i = 1; i <= 5; i++) {
+        out.write(("Chunk " + i + "\n").getBytes());
+        out.flush();
+        System.out.println("Flushed chunk " + i);
+        try { Thread.sleep(1000); } catch (InterruptedException ignored) {}
     }
 
-    return readChunk();
-  });
+    out.close();
+}
 
 
-fetch("http://localhost:8080/spring-stream")
-  .then(res => res.body.getReader())
+fetch('http://localhost:8080/test-chunks')
+  .then(r => r.body.getReader())
   .then(reader => {
     const decoder = new TextDecoder();
     return (function read() {
       return reader.read().then(({ done, value }) => {
-        if (done) return console.log("✅ Done.");
-        console.log("⏬ Chunk received:", decoder.decode(value));
+        if (done) return console.log('✅ done');
+        console.log('⏬', decoder.decode(value));
         return read();
       });
     })();
