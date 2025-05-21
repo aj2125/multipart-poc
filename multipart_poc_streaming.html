@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Progressive JPEG Streaming with Logs + Download</title>
+  <title>Safe Multipart Image Streaming + Download</title>
   <style>
     body { font-family: sans-serif; padding: 1rem; }
     img { max-width: 500px; border: 1px solid #ccc; margin-top: 1rem; }
@@ -14,114 +14,76 @@
   <h2>JSON Data</h2>
   <pre id="json-output">Waiting...</pre>
 
-  <h2>Progressive JPEG Image</h2>
+  <h2>Image Stream</h2>
   <img id="image-output" alt="Streaming image..." />
-
-  <button id="download-btn" style="display:none;">Download Assembled Image</button>
+  <br />
+  <button id="download-btn" style="display:none;">Download Image</button>
 
   <h2>Console Logs</h2>
   <pre id="log-output"></pre>
 
   <script>
+    const log = (...args) => {
+      console.log(...args);
+      document.getElementById("log-output").textContent += args.join(" ") + "\n";
+    };
+
     let finalBlob = null;
 
-    async function fetchStreamingMultipartJPEG() {
+    async function fetchAndParseMultipart() {
       const response = await fetch("http://localhost:8080/multipart-data");
       const contentType = response.headers.get("content-type");
 
       if (!contentType.includes("multipart/form-data")) {
-        console.error("Unexpected content type", contentType);
+        log("Unexpected content type:", contentType);
         return;
       }
 
-      const log = (...args) => {
-        console.log(...args);
-        document.getElementById("log-output").textContent += args.join(" ") + "\n";
-      };
+      const boundary = '--' + contentType.split("boundary=")[1];
+      const rawBuffer = await response.arrayBuffer();
+      const data = new Uint8Array(rawBuffer);
+      const text = new TextDecoder().decode(data);
 
-      const boundary = "--" + contentType.split("boundary=")[1];
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-      let state = "json";
-      let imageChunks = [];
-      let imageBytesSoFar = 0;
-      let chunkCount = 0;
-      let totalBytes = 0;
-      let serverReportedSize = null;
+      const parts = text.split(boundary).filter(p => p.trim() && p.trim() !== "--");
 
-      function updateImage() {
-        finalBlob = new Blob(imageChunks, { type: "image/jpeg" });
-        const url = URL.createObjectURL(finalBlob);
-        document.getElementById("image-output").src = url;
-        log(`🔄 updateImage() called — blob size: ${finalBlob.size} bytes`);
-      }
+      let imageStart = 0;
+      let imageEnd = data.length;
+      let jsonParsed = false;
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        chunkCount++;
-        totalBytes += value.length;
-        log(`📦 Chunk ${chunkCount} received — ${value.length} bytes`);
-
-        if (state !== "stream-image") {
-          const chunkText = decoder.decode(value, { stream: true });
-          buffer += chunkText;
-
-          const jsonMatch = buffer.match(/name="json_data"[\s\S]+?Content-Type:\s*application\/json\r\n\r\n([\s\S]+?)\r\n--/);
-          if (state === "json" && jsonMatch && jsonMatch[1]) {
-            try {
-              const jsonStr = jsonMatch[1].trim();
-              const json = JSON.parse(jsonStr);
-              document.getElementById("json-output").textContent = JSON.stringify(json, null, 2);
-              log("✅ JSON parsed:", jsonStr);
-              if (json.imageSize) {
-                serverReportedSize = json.imageSize;
-                log(`📏 Server-reported image size: ${serverReportedSize} bytes`);
-              }
-              buffer = buffer.slice(buffer.indexOf('name="image_data"'));
-              state = "image-header";
-            } catch (e) {
-              log("❌ JSON parse error:", e);
-            }
+      for (const part of parts) {
+        if (part.includes('name="json_data"')) {
+          const jsonMatch = part.match(/\\r\\n\\r\\n([\\s\\S]*)\\r\\n--/);
+          if (jsonMatch && jsonMatch[1]) {
+            const json = JSON.parse(jsonMatch[1].trim());
+            document.getElementById("json-output").textContent = JSON.stringify(json, null, 2);
+            log("✅ JSON parsed:", JSON.stringify(json));
           }
+        }
 
-          if (state === "image-header" && buffer.includes('name="image_data"')) {
-            const headerEnd = buffer.indexOf("\r\n\r\n") + 4;
-            const headerText = buffer.slice(0, headerEnd);
-            const headerByteLength = new TextEncoder().encode(headerText).length;
-            const leftoverBytes = value.slice(headerByteLength); // ✅ actual binary
-            imageChunks.push(leftoverBytes);
-            imageBytesSoFar += leftoverBytes.length;
-            log(`🧩 First image bytes after header: ${leftoverBytes.length}`);
-            buffer = "";
-            state = "stream-image";
-            updateImage();
-          }
-        } else {
-          imageChunks.push(value);
-          imageBytesSoFar += value.length;
-          if (imageBytesSoFar >= 100 * 1024) {
-            updateImage();
-            imageBytesSoFar = 0;
-          }
+        if (part.includes('name="image_data"')) {
+          // Locate exact byte range of this part in original binary
+          const partIndexInText = text.indexOf(part);
+          const headerEndInPart = part.indexOf("\r\n\r\n") + 4;
+
+          const textBeforeImage = text.slice(0, partIndexInText + headerEndInPart);
+          imageStart = new TextEncoder().encode(textBeforeImage).length;
+
+          const endBoundaryIndex = text.indexOf(boundary, partIndexInText + headerEndInPart);
+          const textUntilNextBoundary = text.slice(0, endBoundaryIndex);
+          imageEnd = new TextEncoder().encode(textUntilNextBoundary).length;
+
+          log(`📍 Image bytes: start=${imageStart}, end=${imageEnd}, size=${imageEnd - imageStart}`);
         }
       }
 
-      if (imageChunks.length > 0) {
-        updateImage();
-        const totalReceived = imageChunks.reduce((a, b) => a + b.length, 0);
-        log(`✅ Streaming complete — total image bytes: ${totalReceived}`);
-        if (serverReportedSize !== null) {
-          log(`🔍 Size match: ${serverReportedSize === totalReceived ? "✔️ yes" : `❌ no (expected ${serverReportedSize})`}`);
-        }
-
-        // ✅ Show download button
-        document.getElementById("download-btn").style.display = "inline-block";
-      }
+      const imageBytes = data.slice(imageStart, imageEnd);
+      finalBlob = new Blob([imageBytes], { type: "image/jpeg" }); // or image/png
+      const url = URL.createObjectURL(finalBlob);
+      document.getElementById("image-output").src = url;
+      document.getElementById("download-btn").style.display = "inline-block";
+      log(`✅ Image reconstructed. Blob size: ${finalBlob.size} bytes`);
     }
 
-    // ✅ Download logic
     document.getElementById("download-btn").addEventListener("click", () => {
       if (!finalBlob) return;
       const a = document.createElement("a");
@@ -130,7 +92,7 @@
       a.click();
     });
 
-    fetchStreamingMultipartJPEG();
+    fetchAndParseMultipart();
   </script>
 </body>
 </html>
