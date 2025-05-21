@@ -1,43 +1,34 @@
-@GetMapping(value = "/stream-multipart", produces = MediaType.MULTIPART_MIXED_VALUE)
-public ResponseEntity<StreamingResponseBody> streamMultipart() {
-    StreamingResponseBody body = outputStream -> {
-        String boundary = "myboundary";
-        String jsonPart = "{\"name\": \"example\", \"description\": \"This is JSON\"}";
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
-        // Write JSON part
-        outputStream.write(("--" + boundary + "\r\n").getBytes());
-        outputStream.write("Content-Type: application/json\r\n\r\n".getBytes());
-        outputStream.write(jsonPart.getBytes());
-        outputStream.write("\r\n".getBytes());
-        outputStream.flush();  // ✅ Critical to stream it early
+import java.io.OutputStream;
 
-        // Simulate delay to mimic streaming effect
-        Thread.sleep(1000);
+@RestController
+public class SpringStyleStreamingController {
 
-        // Load image
-        File image = new File("src/main/resources/static/image1.png");
-        FileInputStream fis = new FileInputStream(image);
+    @GetMapping("/spring-stream")
+    public ResponseEntity<StreamingResponseBody> springStream() {
 
-        // Write image part
-        outputStream.write(("--" + boundary + "\r\n").getBytes());
-        outputStream.write("Content-Type: image/png\r\n".getBytes());
-        outputStream.write(("Content-Disposition: attachment; filename=\"image1.png\"\r\n\r\n").getBytes());
+        StreamingResponseBody stream = outputStream -> {
+            for (int i = 0; i < 3; i++) {
+                String chunk = "Spring Chunk " + i + "\n";
+                outputStream.write(chunk.getBytes());
+                outputStream.flush();  // ✅ Flush attempt
+                System.out.println("[Spring] Flushed: " + chunk);
+                Thread.sleep(1000);    // simulate delay between chunks
+            }
+        };
 
-        byte[] buffer = new byte[1024];
-        int bytesRead;
-        while ((bytesRead = fis.read(buffer)) != -1) {
-            outputStream.write(buffer, 0, bytesRead);
-            outputStream.flush(); // ✅ Streaming!
-        }
-        fis.close();
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.TEXT_PLAIN);
+        // You can try forcing this, but Spring/Tomcat might ignore it
+        // headers.set("Transfer-Encoding", "chunked");
 
-        // End boundary
-        outputStream.write(("\r\n--" + boundary + "--\r\n").getBytes());
-        outputStream.flush();
-    };
-
-    HttpHeaders headers = new HttpHeaders();
-    headers.setContentType(MediaType.parseMediaType("multipart/mixed; boundary=myboundary"));
-
-    return new ResponseEntity<>(body, headers, HttpStatus.OK);
+        return new ResponseEntity<>(stream, headers, HttpStatus.OK);
+    }
 }
