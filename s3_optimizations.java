@@ -29,3 +29,26 @@ public class S3ClientFactory {
             });
     }
 }
+
+// force DNS + TLS + connection pool fill
+s3.getObject(GetObjectRequest.builder()
+    .bucket(bucketName)
+    .key("some-small-file-or-metadata")
+    .build());
+
+
+NettyNioAsyncHttpClient httpClient = NettyNioAsyncHttpClient.builder()
+    .enableHttp2(true)
+    .maxConcurrency(64)
+    .build();
+S3AsyncClient s3Async = S3AsyncClient.builder()
+    .httpClient(httpClient)
+    .region(Region.US_EAST_1)
+    .build();
+// force DNS + TLS + connection pool fill
+s3.getObject(GetObjectRequest.builder()
+    .bucket(bucketName)
+    .key("some-small-file-or-metadata")
+    .build());
+InetAddress.getByName("s3.us-east-1.amazonaws.com");
+
