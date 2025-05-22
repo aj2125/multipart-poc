@@ -1,0 +1,94 @@
+provider "aws" {
+  region = "us-east-1"
+}
+
+###############################################################################
+# 1) WebSocket API
+###############################################################################
+resource "aws_apigatewayv2_api" "ws" {
+  name                       = "ecs-ws-api"
+  protocol_type              = "WEBSOCKET"
+  route_selection_expression = "$request.body.action"
+}
+
+###############################################################################
+# 2) VPC Link (so API GW can reach your ALB in the VPC)
+###############################################################################
+resource "aws_apigatewayv2_vpc_link" "ecs_alb" {
+  name               = "ecs-alb-vpc-link"
+  subnet_ids         = var.private_subnet_ids          # e.g. ["subnet-aaa","subnet-bbb"]
+  security_group_ids = [aws_security_group.alb_sg.id]   # SG that allows API GW IPs -> ALB
+}
+
+###############################################################################
+# 3) HTTP_PROXY Integrations to ALB
+###############################################################################
+# Replace with your ALB DNS name (from aws_lb.my_alb.dns_name)
+locals {
+  alb_dns = aws_lb.my_alb.dns_name
+}
+
+# $connect
+resource "aws_apigatewayv2_integration" "connect" {
+  api_id           = aws_apigatewayv2_api.ws.id
+  integration_type = "HTTP_PROXY"
+  connection_type  = "VPC_LINK"
+  connection_id    = aws_apigatewayv2_vpc_link.ecs_alb.id
+  integration_uri  = "http://${local.alb_dns}/ws/connect"
+  integration_method = "POST"
+  payload_format_version = "1.0"
+}
+
+# $disconnect
+resource "aws_apigatewayv2_integration" "disconnect" {
+  api_id           = aws_apigatewayv2_api.ws.id
+  integration_type = "HTTP_PROXY"
+  connection_type  = "VPC_LINK"
+  connection_id    = aws_apigatewayv2_vpc_link.ecs_alb.id
+  integration_uri  = "http://${local.alb_dns}/ws/disconnect"
+  integration_method = "POST"
+  payload_format_version = "1.0"
+}
+
+# sendMessage
+resource "aws_apigatewayv2_integration" "message" {
+  api_id           = aws_apigatewayv2_api.ws.id
+  integration_type = "HTTP_PROXY"
+  connection_type  = "VPC_LINK"
+  connection_id    = aws_apigatewayv2_vpc_link.ecs_alb.id
+  integration_uri  = "http://${local.alb_dns}/ws/message"
+  integration_method = "POST"
+  payload_format_version = "1.0"
+}
+
+###############################################################################
+# 4) WebSocket Routes
+###############################################################################
+resource "aws_apigatewayv2_route" "connect" {
+  api_id    = aws_apigatewayv2_api.ws.id
+  route_key = "$connect"
+  target    = "integrations/${aws_apigatewayv2_integration.connect.id}"
+}
+
+resource "aws_apigatewayv2_route" "disconnect" {
+  api_id    = aws_apigatewayv2_api.ws.id
+  route_key = "$disconnect"
+  target    = "integrations/${aws_apigatewayv2_integration.disconnect.id}"
+}
+
+resource "aws_apigatewayv2_route" "message" {
+  api_id    = aws_apigatewayv2_api.ws.id
+  route_key = "sendMessage"
+  target    = "integrations/${aws_apigatewayv2_integration.message.id}"
+}
+
+###############################################################################
+# 5) Deployment & Stage
+###############################################################################
+resource "aws_apigatewayv2_stage" "prod" {
+  api_id      = aws_apigatewayv2_api.ws.id
+  name        = "prod"
+  auto_deploy = true
+}
+
+# No Lambda permissions needed here since we’re calling ALB/ECS directly
