@@ -54,3 +54,60 @@ public class RestTemplateConfig {
                 upstream.getStatusCode()
         );
     }
+
+
+package com.example.multipartConsumer;
+
+import org.springframework.http.*;
+import org.springframework.http.converter.ByteArrayHttpMessageConverter;
+import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestTemplate;
+
+import java.util.Collections;
+
+@Service
+public class MultipartPassthroughService {
+
+    private final RestTemplate restTemplate;
+
+    public MultipartPassthroughService(RestTemplate restTemplate) {
+        this.restTemplate = restTemplate;
+        // 1) Make a ByteArray converter that will read ANY content-type
+        ByteArrayHttpMessageConverter byteBodyConv = new ByteArrayHttpMessageConverter();
+        byteBodyConv.setSupportedMediaTypes(Collections.singletonList(MediaType.ALL));
+        // Put it first so byte[].class works for multipart/form-data
+        this.restTemplate.getMessageConverters().add(0, byteBodyConv);
+    }
+
+    public ResponseEntity<byte[]> fetchAndForward() {
+        String upstreamUrl   = "http://localhost:8080/multipart-data";
+        String downstreamUrl = "http://localhost:8082/next-service";
+
+        // 2) Fetch the raw multipart response as a byte[]
+        ResponseEntity<byte[]> upstreamResponse = restTemplate.exchange(
+            upstreamUrl,
+            HttpMethod.GET,
+            HttpEntity.EMPTY,
+            byte[].class               // thanks to our ALL-media-types converter
+        );
+
+        // 3) Re-build the headers exactly as we got them (preserving Content-Type, boundary, etc.)
+        HttpHeaders forwardHeaders = new HttpHeaders();
+        forwardHeaders.putAll(upstreamResponse.getHeaders());
+
+        // 4) Send the body+headers onward
+        HttpEntity<byte[]> forwardRequest = new HttpEntity<>(
+            upstreamResponse.getBody(),
+            forwardHeaders
+        );
+
+        // Note: you can change the responseType to whatever the downstream returns
+        return restTemplate.exchange(
+            downstreamUrl,
+            HttpMethod.POST,
+            forwardRequest,
+            byte[].class
+        );
+    }
+}
+
