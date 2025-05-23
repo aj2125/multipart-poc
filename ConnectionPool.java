@@ -72,5 +72,43 @@ public class CachingDns implements Dns {
 .dns(new CachingDns())
 
 
+import okhttp3.Call;
+import okhttp3.Callback;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.Response;
+
+import java.io.IOException;
+import java.time.Duration;
+
+public class Warmup {
+
+    /**
+     * Fires off a single HEAD “ping” to the CDN to pre-establish DNS, TCP and TLS
+     * on the shared OkHttpClient connection pool.
+     * 
+     * @param client an optimized OkHttpClient (keep-alive, pooling, HTTP/2 enabled)
+     */
+    public Warmup(OkHttpClient client) {
+        Request ping = new Request.Builder()
+            .url("https://vendor-cdn.example.com/ping")
+            .head()  // only metadata, no body download
+            .build();
+
+        // Asynchronous enqueue to avoid blocking startup thread
+        client.newCall(ping).enqueue(new Callback() {
+            @Override
+            public void onFailure(Call call, IOException e) {
+                // No-op: warm-up failures are non-fatal
+            }
+
+            @Override
+            public void onResponse(Call call, Response response) throws IOException {
+                // Drain and close immediately to return the connection to the pool
+                response.body().close();
+            }
+        });
+    }
+}
 
   
