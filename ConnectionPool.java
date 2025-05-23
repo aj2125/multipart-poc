@@ -111,4 +111,13 @@ public class Warmup {
     }
 }
 
+
+
+    software.amazon.awssdk: DEBUG
+    # Optional: Enable DEBUG logging for specific AWS services
+    software.amazon.awssdk.request: DEBUG
+    software.amazon.awssdk.response: DEBUG
+    software.amazon.awssdk.services.s3: DEBUG
+    software.amazon.awssdk.services.dynamodb: DEBUG
+
   
