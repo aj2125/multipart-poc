@@ -1,0 +1,56 @@
+package com.example.multipartConsumer;
+
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.http.converter.ByteArrayHttpMessageConverter;
+import org.springframework.http.converter.HttpMessageConverter;
+import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
+import org.springframework.http.converter.support.AllEncompassingFormHttpMessageConverter;
+import org.springframework.web.client.RestTemplate;
+
+import java.util.List;
+
+@Configuration
+public class RestTemplateConfig {
+
+    @Bean
+    public RestTemplate restTemplate() {
+        RestTemplate rest = new RestTemplate();
+        List<HttpMessageConverter<?>> converters = rest.getMessageConverters();
+
+        // 0: multipart/form-data reader
+        converters.set(0, new AllEncompassingFormHttpMessageConverter());
+        // 1: JSON converter
+        converters.set(1, new MappingJackson2HttpMessageConverter());
+        // 2: byte[] converter
+        converters.set(2, new ByteArrayHttpMessageConverter());
+
+        return rest;
+    }
+}
+
+  @GetMapping("/multipart-proxy")
+    public ResponseEntity<byte[]> proxyMultipart() {
+        String upstreamUrl = "http://localhost:8080/multipart-data";
+
+        // 1) Fetch the raw bytes + headers from the upstream service
+        ResponseEntity<byte[]> upstream = restTemplate.exchange(
+                upstreamUrl,
+                HttpMethod.GET,
+                /* no request entity */ null,
+                byte[].class
+        );
+
+        // 2) Copy *all* headers into our response
+        HttpHeaders forwarded = new HttpHeaders();
+        upstream.getHeaders().forEach((name, values) ->
+                values.forEach(v -> forwarded.add(name, v))
+        );
+
+        // 3) Return status, headers, and raw body unmodified
+        return new ResponseEntity<>(
+                upstream.getBody(),
+                forwarded,
+                upstream.getStatusCode()
+        );
+    }
