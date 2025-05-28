@@ -152,3 +152,51 @@ public class S3PrewarmConfig {
     }
 }
 
+
+package com.example.config;
+
+import javax.annotation.PostConstruct;
+
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Conditional;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Profile;
+
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.HeadObjectResponse;
+
+@Configuration
+@Profile({"dev", "test", "uat"})                              // only in non-prod
+@ConditionalOnProperty(name = "s3.prewarm.enabled", havingValue = "true")
+public class S3PrewarmConfig {
+
+    private final S3Client s3Client;
+
+    @Value("${s3.prewarm.bucket:}") 
+    private String bucket;
+
+    @Value("${s3.prewarm.key:}")
+    private String key;
+
+    public S3PrewarmConfig(S3Client s3Client) {
+        this.s3Client = s3Client;
+    }
+
+    @PostConstruct
+    public void warmUp() {
+        if (bucket.isEmpty() || key.isEmpty()) {
+            // nothing to do
+            return;
+        }
+        try {
+            HeadObjectResponse meta = s3Client.headObject(h -> 
+                h.bucket(bucket).key(key)
+            );
+            // optionally log meta.contentLength() or meta.contentType()
+        } catch (Exception ignore) {
+            // best-effort only
+        }
+    }
+}
+
+
