@@ -128,3 +128,23 @@ public class ImageController {
         }
     }
 }
+
+
+@Configuration
+@ConditionalOnProperty(name = "s3.prewarm.enabled", havingValue = "true")
+public class S3PrewarmConfig {
+
+    @Bean
+    public ApplicationRunner s3Prewarmer(
+            S3Client s3Client,
+            @Value("${s3.prewarm.bucket}") String bucket,
+            @Value("${s3.prewarm.key}") String key) {
+        return args -> {
+            try {
+                s3Client.headObject(h -> h.bucket(bucket).key(key));
+            } catch (Exception e) {
+                // swallow, it's just a warm-up
+            }
+        };
+    }
+}
