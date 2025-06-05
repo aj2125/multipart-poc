@@ -1,0 +1,96 @@
+Below is a template SPL (Splunk Processing Language) query that demonstrates how to group all retry‐events by the “persistent” trace‐ID (i.e. the field that stays the same across retries), count how many of those retries returned a 200, and then filter to only show groups where at least one status = 200. You will need to replace <your_base_search>, persistent_trace_id, and status with the actual index, sourcetype or field names in your environment.
+
+spl
+Copy
+Edit
+<your_base_search>
+| stats 
+    count(eval(status=200))       AS okCount, 
+    count(status)                 AS totalCount, 
+    values(status)                AS allStatuses, 
+    values(traceId)               AS allRetryTraceIds
+  BY persistent_trace_id
+| where okCount > 0
+| table persistent_trace_id, okCount, totalCount, allStatuses, allRetryTraceIds
+Explanation
+<your_base_search>
+Replace this with whatever you currently use to fetch the raw events. For example:
+
+diff
+Copy
+Edit
+index=my_index sourcetype=api_logs 
+| fields persistent_trace_id, traceId, status
+persistent_trace_id = the field whose value is identical across all retry‐attempts.
+
+traceId (or whatever you’ve named the per‐attempt trace ID) = the field that changes on each retry.
+
+status = the HTTP status code logged for the external API call.
+
+stats count(eval(status=200)) AS okCount … BY persistent_trace_id
+
+count(eval(status=200)) AS okCount
+Counts how many events in each persistent_trace_id bucket have status=200.
+
+count(status) AS totalCount
+Counts the total number of retry‐events for each persistent_trace_id.
+
+values(status) AS allStatuses
+Collects a multivalue list of all status codes seen in that bucket (e.g. 200, 500, 400, 200).
+
+values(traceId) AS allRetryTraceIds
+Collects all of the per‐attempt trace IDs belonging to that same persistent ID.
+
+| where okCount > 0
+Filters out every group that never saw a 200. Only those persistent_trace_id groups where at least one retry returned 200 will remain.
+
+| table …
+Shows the final fields:
+
+persistent_trace_id = the bucket key.
+
+okCount = how many of its retries were HTTP 200.
+
+totalCount = total number of retries.
+
+allStatuses = the list of every status code seen.
+
+allRetryTraceIds = the list of retry‐specific trace IDs.
+
+Example with concrete field names
+Suppose your logs extract these fields:
+
+parentTraceId (top‐level trace, same across retries)
+
+traceId (unique per retry)
+
+httpStatus (the status code of the external API
+
+An example query would be:
+
+spl
+Copy
+Edit
+index=production sourcetype=my_api_logs
+| fields parentTraceId, traceId, httpStatus
+| stats 
+    count(eval(httpStatus=200))     AS okCount, 
+    count(httpStatus)               AS totalCount, 
+    values(httpStatus)              AS allStatuses, 
+    values(traceId)                 AS allRetryTraceIds
+  BY parentTraceId
+| where okCount > 0
+| table parentTraceId, okCount, totalCount, allStatuses, allRetryTraceIds
+okCount > 0 ensures you only see those parentTraceId groups where at least one retry was 200.
+
+allStatuses might look like [400, 500, 200], confirming a 200 occurred somewhere.
+
+Feel free to adjust the field names and base search to match your exact environment.
+
+
+
+
+
+
+
+
