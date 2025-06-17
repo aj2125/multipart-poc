@@ -1,0 +1,23 @@
+paths:
+  /vehicle/export:
+    get:
+      summary: Return vehicle image and metadata
+      operationId: getVehicleExport
+      responses:
+        '200':
+          description: Multipart with image and JSON
+          content:
+            multipart/mixed:
+              schema:
+                type: object
+                properties:
+                  garagedVehicle:
+                    type: object
+                  vehicleImage:
+                    type: string
+                    format: binary
+              encoding:
+                garagedVehicle:
+                  contentType: application/json
+                vehicleImage:
+                  contentType: image/png
