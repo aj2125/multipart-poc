@@ -1,3 +1,6 @@
+
+
+, produces = MediaType.MULTIPART_MIXED_VALUE)
 resource "aws_api_gateway_rest_api" "vehicle_api" {
   name = "vehicle-api"
 
