@@ -5,17 +5,17 @@ paths:
       operationId: getVehicleExport
       responses:
         '200':
-          description: Multipart with image and JSON
+          description: Multipart with JSON and raw image
           content:
             multipart/mixed:
               schema:
                 type: object
                 properties:
                   garagedVehicle:
-                    type: object
+                    type: object  # JSON part
                   vehicleImage:
                     type: string
-                    format: binary
+                    format: binary  # 👈 RAW binary (byte[]) here
               encoding:
                 garagedVehicle:
                   contentType: application/json
