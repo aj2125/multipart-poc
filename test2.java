@@ -1,9 +1,21 @@
+resource "aws_api_gateway_rest_api" "vehicle_api" {
+  name = "vehicle-api"
 
-binary_media_types = [
+  binary_media_types = [
     "multipart/mixed",
+    "multipart/form-data",
     "image/png",
+    "image/jpeg",
+    "image/jpg",
+    "image/webp",
+    "image/gif",
+    "image/svg+xml",
+    "application/pdf",
+    "application/zip",
     "application/octet-stream"
   ]
+}
+
 
 
 @GetMapping(value = "/stream-multipart", produces = MediaType.MULTIPART_MIXED_VALUE)
