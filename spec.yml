@@ -1,21 +1,42 @@
+openapi: 3.0.3
+info:
+  title: Vehicle Export API
+  version: 1.0.0
+  description: Returns a multipart/mixed response containing vehicle metadata and raw image bytes
+
+x-amazon-apigateway-binary-media-types:
+  - image/png
+  - image/jpeg
+  - image/jpg
+  - image/webp
+  - image/gif
+  - image/svg+xml
+  - application/pdf
+  - application/zip
+  - application/octet-stream
+  - multipart/form-data
+  - multipart/mixed
+
 paths:
   /vehicle/export:
     get:
-      summary: Return vehicle image and metadata
+      summary: Export vehicle data and image
       operationId: getVehicleExport
       responses:
         '200':
-          description: Multipart with JSON and raw image
+          description: Success – multipart response with JSON and image
           content:
             multipart/mixed:
               schema:
                 type: object
                 properties:
                   garagedVehicle:
-                    type: object  # JSON part
+                    type: object
+                    description: JSON metadata about the vehicle
                   vehicleImage:
                     type: string
-                    format: binary  # 👈 RAW binary (byte[]) here
+                    format: binary
+                    description: Raw PNG image (byte[])
               encoding:
                 garagedVehicle:
                   contentType: application/json
