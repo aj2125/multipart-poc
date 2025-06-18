@@ -19,6 +19,50 @@ resource "aws_api_gateway_rest_api" "vehicle_api" {
   ]
 }
 
+import org.springframework.core.io.ByteArrayResource;
+import org.springframework.http.*;
+import org.springframework.util.LinkedMultiValueMap;
+import org.springframework.util.MultiValueMap;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.util.Map;
+
+@RestController
+public class VehicleExportController {
+
+    @GetMapping(value = "/vehicle/export", produces = MediaType.MULTIPART_MIXED_VALUE)
+    public ResponseEntity<MultiValueMap<String, Object>> exportVehicle() throws Exception {
+        // Part 1: JSON metadata
+        Map<String, Object> garagedVehicle = Map.of(
+                "make", "Toyota",
+                "model", "Camry",
+                "year", 2021
+        );
+        HttpHeaders jsonHeaders = new HttpHeaders();
+        jsonHeaders.setContentType(MediaType.APPLICATION_JSON);
+        HttpEntity<Map<String, Object>> jsonPart = new HttpEntity<>(garagedVehicle, jsonHeaders);
+
+        // Part 2: PNG image
+        byte[] imageBytes = Files.readAllBytes(Paths.get("src/main/resources/sample.png"));
+        ByteArrayResource imageResource = new ByteArrayResource(imageBytes);
+        HttpHeaders imageHeaders = new HttpHeaders();
+        imageHeaders.setContentType(MediaType.IMAGE_PNG);
+        imageHeaders.setContentDisposition(ContentDisposition.attachment().filename("vehicle.png").build());
+        HttpEntity<ByteArrayResource> imagePart = new HttpEntity<>(imageResource, imageHeaders);
+
+        // Build multipart body
+        MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
+        body.add("garagedVehicle", jsonPart);
+        body.add("vehicleImage", imagePart);
+
+        return ResponseEntity.ok()
+                .contentType(MediaType.MULTIPART_MIXED)
+                .body(body);
+    }
+}
 
 
 @GetMapping(value = "/stream-multipart", produces = MediaType.MULTIPART_MIXED_VALUE)
