@@ -1,3 +1,11 @@
+
+binary_media_types = [
+    "multipart/mixed",
+    "image/png",
+    "application/octet-stream"
+  ]
+
+
 @GetMapping(value = "/stream-multipart", produces = MediaType.MULTIPART_MIXED_VALUE)
 public void streamMultipart(HttpServletResponse response) throws IOException {
     String boundary = "myboundary";
