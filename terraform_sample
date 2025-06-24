@@ -1,3 +1,23 @@
+
+resource "null_resource" "patch_api_gateway_binary_support" {
+  provisioner "local-exec" {
+    command = <<EOT
+      aws apigateway update-integration \
+        --rest-api-id ${aws_api_gateway_rest_api.example.id} \
+        --resource-id ${aws_api_gateway_resource.example.id} \
+        --http-method POST \
+        --patch-operations op=replace,path=/contentHandling,value=CONVERT_TO_BINARY
+    EOT
+  }
+
+  depends_on = [
+    aws_api_gateway_integration.example,
+    aws_api_gateway_deployment.example
+  ]
+}
+
+
+
 provider "aws" {
   region = "us-east-1"
 }
