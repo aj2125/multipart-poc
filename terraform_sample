@@ -1,3 +1,19 @@
+
+resource "null_resource" "patch_binary_support" {
+  provisioner "local-exec" {
+    command = <<EOT
+    aws apigateway update-integration \
+      --rest-api-id ${aws_api_gateway_rest_api.main.id} \
+      --resource-id ${aws_api_gateway_resource.multipart.id} \
+      --http-method POST \
+      --patch-operations op=replace,path=/contentHandling,value=CONVERT_TO_BINARY
+    EOT
+  }
+
+  depends_on = [aws_api_gateway_integration.multipart]
+}
+
+
 resource "aws_api_gateway_resource" "multipart" {
   rest_api_id = aws_api_gateway_rest_api.main.id
   parent_id   = data.aws_api_gateway_resource.parent.id
