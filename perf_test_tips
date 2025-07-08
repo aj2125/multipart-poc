@@ -1,0 +1,285 @@
+for i in {1..100}; do
+  aws sqs send-message-batch \
+    --queue-url https://sqs.REGION.amazonaws.com/123456789012/my-queue \
+    --entries "[
+      {\"Id\":\"msg1\",\"MessageBody\":\"test-1\"},
+      {\"Id\":\"msg2\",\"MessageBody\":\"test-2\"},
+      {\"Id\":\"msg3\",\"MessageBody\":\"test-3\"},
+      {\"Id\":\"msg4\",\"MessageBody\":\"test-4\"},
+      {\"Id\":\"msg5\",\"MessageBody\":\"test-5\"},
+      {\"Id\":\"msg6\",\"MessageBody\":\"test-6\"},
+      {\"Id\":\"msg7\",\"MessageBody\":\"test-7\"},
+      {\"Id\":\"msg8\",\"MessageBody\":\"test-8\"},
+      {\"Id\":\"msg9\",\"MessageBody\":\"test-9\"},
+      {\"Id\":\"msg10\",\"MessageBody\":\"test-10\"}
+    ]"
+done
+
+
+import boto3
+import uuid
+
+sqs = boto3.client('sqs')
+queue_url = 'https://sqs.REGION.amazonaws.com/123456789012/my-queue'
+
+def push_messages(batch_count=100):
+    for _ in range(batch_count):
+        entries = [
+            {
+                'Id': str(uuid.uuid4()),
+                'MessageBody': f'Message {i}'
+            } for i in range(10)
+        ]
+        sqs.send_message_batch(QueueUrl=queue_url, Entries=entries)
+
+if __name__ == '__main__':
+    push_messages(batch_count=100)  # Sends 1000 messages
+
+
+
+🧪 How to Measure Results (Scaling + TPS)
+✅ CloudWatch Logs:
+Go to Lambda → Monitor → View logs in CloudWatch
+
+See how many invocations started and how fast
+
+You can use ConcurrentExecutions metric in CloudWatch Metrics
+
+✅ CloudWatch Metrics:
+Under Lambda > ConcurrentExecutions
+
+Also check SQS → ApproximateNumberOfMessagesNotVisible to measure in-flight messages
+
+✅ Log Insights Query (optional):
+To count total Lambda invocations:
+
+sql
+Copy
+Edit
+fields @timestamp, @message
+| filter @message like /START RequestId/
+| stats count() as invocations by bin(1m)
+
+
+🧠 Best Practice Tips for Stress Testing
+Setting	Recommendation
+Lambda Reserved Concurrency	Set to 500
+SQS Batch Size	Try 10 for max throughput
+SQS Visibility Timeout	Set > Lambda max timeout (e.g., 180s)
+Monitor	Use CloudWatch metrics + Insights
+Re-drive DLQ	Enable it to catch failures and ensure messages don’t disappear
+
+
+
+import boto3
+import uuid
+
+sqs = boto3.client('sqs', region_name='us-east-1')  # Replace region
+queue_url = 'https://sqs.us-east-1.amazonaws.com/123456789012/my-queue'
+
+def push_messages(batch_count=100):
+    for _ in range(batch_count):
+        entries = [
+            {
+                'Id': str(uuid.uuid4()),
+                'MessageBody': f'Test message {i}'
+            } for i in range(10)
+        ]
+        response = sqs.send_message_batch(
+            QueueUrl=queue_url,
+            Entries=entries
+        )
+        print(f"Batch sent: {response['Successful']}")
+
+if __name__ == '__main__':
+    push_messages(batch_count=100)  # 100 batches × 10 = 1000 messages
+
+
+
+<dependency>
+    <groupId>software.amazon.awssdk</groupId>
+    <artifactId>sqs</artifactId>
+    <version>2.25.7</version>
+</dependency>
+
+
+
+import org.springframework.stereotype.Service;
+import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.sqs.SqsClient;
+import software.amazon.awssdk.services.sqs.model.*;
+
+import javax.annotation.PostConstruct;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
+
+@Service
+public class SqsLoadTestService {
+
+    private final SqsClient sqsClient;
+    private final String queueUrl = "https://sqs.us-east-1.amazonaws.com/123456789012/my-queue"; // Replace
+
+    public SqsLoadTestService() {
+        this.sqsClient = SqsClient.builder()
+                .region(Region.US_EAST_1) // Replace with your region
+                .build();
+    }
+
+    @PostConstruct
+    public void sendTestMessages() {
+        int batchCount = 100;
+
+        for (int j = 0; j < batchCount; j++) {
+            List<SendMessageBatchRequestEntry> entries = new ArrayList<>();
+
+            for (int i = 0; i < 10; i++) {
+                entries.add(SendMessageBatchRequestEntry.builder()
+                        .id(UUID.randomUUID().toString())
+                        .messageBody("Test message " + i)
+                        .build());
+            }
+
+            SendMessageBatchRequest batchRequest = SendMessageBatchRequest.builder()
+                    .queueUrl(queueUrl)
+                    .entries(entries)
+                    .build();
+
+            SendMessageBatchResponse response = sqsClient.sendMessageBatch(batchRequest);
+            System.out.println("Batch sent: " + response.successful().size() + " messages");
+        }
+    }
+}
+
+
+
+package com.example.sqsloadtest;
+
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.stereotype.Service;
+
+import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.sqs.SqsClient;
+import software.amazon.awssdk.services.sqs.model.*;
+
+import java.time.Duration;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
+import java.util.concurrent.*;
+
+@RestController
+public class LoadTestController {
+
+    private final SqsLoadTestService loadTestService;
+
+    public LoadTestController(SqsLoadTestService loadTestService) {
+        this.loadTestService = loadTestService;
+    }
+
+    @GetMapping("/send-load")
+    public String triggerLoadTest() {
+        loadTestService.sendMessagesWithVirtualThreads();
+        return "Load test triggered.";
+    }
+}
+
+@Service
+class SqsLoadTestService {
+
+    private final SqsClient sqsClient;
+
+    @Value("${aws.sqs.queue-url}")
+    private String queueUrl;
+
+    public SqsLoadTestService() {
+        this.sqsClient = SqsClient.builder()
+                .region(Region.US_EAST_1) // Update if needed
+                .build();
+    }
+
+    public void sendMessagesWithVirtualThreads() {
+        int batchCount = 100; // 100 batches * 10 messages = 1000 messages
+
+        Instant start = Instant.now();
+
+        ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
+
+        List<Future<?>> futures = new ArrayList<>();
+        for (int j = 0; j < batchCount; j++) {
+            futures.add(executor.submit(() -> sendSingleBatch()));
+        }
+
+        // Wait for all tasks
+        for (Future<?> f : futures) {
+            try {
+                f.get();
+            } catch (InterruptedException | ExecutionException e) {
+                e.printStackTrace();
+            }
+        }
+
+        executor.close();
+        Instant end = Instant.now();
+        System.out.println("Total time taken: " + Duration.between(start, end).toMillis() + " ms");
+    }
+
+    private void sendSingleBatch() {
+        List<SendMessageBatchRequestEntry> entries = new ArrayList<>();
+        for (int i = 0; i < 10; i++) {
+            entries.add(SendMessageBatchRequestEntry.builder()
+                    .id(UUID.randomUUID().toString())
+                    .messageBody("Test message " + i)
+                    .build());
+        }
+
+        SendMessageBatchRequest batchRequest = SendMessageBatchRequest.builder()
+                .queueUrl(queueUrl)
+                .entries(entries)
+                .build();
+
+        SendMessageBatchResponse response = sqsClient.sendMessageBatch(batchRequest);
+        System.out.println("Batch sent: " + response.successful().size() + "/" + entries.size());
+    }
+}
+
+@Configuration
+class VirtualThreadConfig {
+    @Bean
+    public ExecutorService virtualThreadExecutorService() {
+        return Executors.newVirtualThreadPerTaskExecutor();
+    }
+}
+
+
+
+Requirements:
+Java 21+ to support virtual threads (Project Loom)
+
+Spring Boot 3.x recommended
+
+Add the AWS SDK v2 for SQS:
+
+xml
+Copy
+Edit
+<dependency>
+  <groupId>software.amazon.awssdk</groupId>
+  <artifactId>sqs</artifactId>
+  <version>2.25.7</version>
+</dependency>
+Add this to your application.properties:
+
+properties
+Copy
+Edit
+aws.sqs.queue-url=https://sqs.us-east-1.amazonaws.com/123456789012/my-queue
+
+
+
+
