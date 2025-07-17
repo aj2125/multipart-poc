@@ -153,6 +153,83 @@ public class ImageUploadController {
 
 
 
+@Service
+public class ImageS3FetcherService {
+
+    private final AmazonS3 s3Client;
+    private final String bucketName = "your-bucket-name"; // inject via config
+
+    public ImageS3FetcherService(AmazonS3 s3Client) {
+        this.s3Client = s3Client;
+    }
+
+    /**
+     * Streams an image from S3 directly into a provided OutputStream.
+     */
+    public void streamImageToOutputStream(String s3Key, OutputStream outputStream) throws IOException {
+        S3Object s3Object = s3Client.getObject(bucketName, s3Key);
+        try (InputStream s3Input = s3Object.getObjectContent()) {
+            s3Input.transferTo(outputStream);
+        }
+    }
+
+    /**
+     * Alternative: Returns a streaming response body for HTTP response.
+     */
+    public StreamingResponseBody getStreamingResponse(String s3Key) {
+        return outputStream -> {
+            try (InputStream inputStream = s3Client.getObject(bucketName, s3Key).getObjectContent()) {
+                inputStream.transferTo(outputStream);
+            }
+        };
+    }
+
+    /**
+     * Only use if you absolutely need bytes for processing.
+     */
+    public byte[] getBytesFromS3(String s3Key) throws IOException {
+        try (S3ObjectInputStream in = s3Client.getObject(bucketName, s3Key).getObjectContent()) {
+            return in.readAllBytes(); // fallback if necessary
+        }
+    }
+}
+
+
+
+@RestController
+@RequestMapping("/images")
+public class ImageStreamingController {
+
+    private final ImageS3FetcherService imageFetcher;
+
+    public ImageStreamingController(ImageS3FetcherService imageFetcher) {
+        this.imageFetcher = imageFetcher;
+    }
+
+    @GetMapping("/view/{key}")
+    public ResponseEntity<StreamingResponseBody> streamImage(@PathVariable String key) {
+        StreamingResponseBody body = imageFetcher.getStreamingResponse(key);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_TYPE, "image/webp") // or detect from key
+                .body(body);
+    }
+}
+
+
+🔁 Optional Fallback (if Byte Array Needed for Compression):
+java
+Copy
+Edit
+public void streamAndCompress(String s3Key, OutputStream outputStream) throws IOException {
+    try (InputStream inputStream = s3Client.getObject(bucketName, s3Key).getObjectContent()) {
+        BufferedImage image = ImageIO.read(inputStream); // Memory-intensive
+        ImageIO.write(image, "webp", outputStream);
+    }
+}
+
+
+
+
 
 
 
