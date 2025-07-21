@@ -545,3 +545,93 @@ public class WebPConverter {
                 : "❌ Output file not found after process: " + outputFile);
     }
 }
+
+
+
+import java.io.*;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
+
+public class WebPConverter {
+
+    private static final String FFMPEG_BINARY = "ffmpeg"; // Ensure this is in your PATH or update accordingly
+
+    public static void convertToWebPLossless(Path inputFile, Path outputFile) throws IOException, InterruptedException {
+        convert(inputFile, outputFile, true);
+    }
+
+    public static void convertToWebPLossy(Path inputFile, Path outputFile) throws IOException, InterruptedException {
+        convert(inputFile, outputFile, false);
+    }
+
+    public static void generateThumbnail(Path inputFile, Path outputFile, int width) throws IOException, InterruptedException {
+        if (!Files.exists(inputFile)) {
+            System.err.println("❌ Input file does not exist: " + inputFile);
+            return;
+        }
+
+        Files.createDirectories(outputFile.getParent());
+
+        List<String> command = List.of(
+            FFMPEG_BINARY,
+            "-y",
+            "-i", inputFile.toString(),
+            "-vf", "scale=" + width + ":-1",
+            "-frames:v", "1",
+            outputFile.toString()
+        );
+
+        runCommand(command, "thumbnail");
+    }
+
+    private static void convert(Path inputFile, Path outputFile, boolean lossless) throws IOException, InterruptedException {
+        System.out.println("🔍 Checking input file existence...");
+        if (!Files.exists(inputFile)) {
+            System.err.println("❌ Input file does not exist: " + inputFile);
+            return;
+        }
+        System.out.println("✅ Input file exists: " + inputFile);
+
+        Files.createDirectories(outputFile.getParent());
+        System.out.println("📁 Output directory ensured: " + outputFile.getParent());
+
+        List<String> command = List.of(
+            FFMPEG_BINARY,
+            "-y",
+            "-i", inputFile.toString(),
+            "-c:v", "libwebp",
+            lossless ? "-lossless" : "-qscale",
+            lossless ? "1" : "75",
+            outputFile.toString()
+        );
+
+        runCommand(command, lossless ? "WebP lossless" : "WebP lossy");
+    }
+
+    private static void runCommand(List<String> command, String taskLabel) throws IOException, InterruptedException {
+        System.out.println("🚀 Running FFmpeg (" + taskLabel + ") with command:");
+        System.out.println(String.join(" ", command));
+
+        ProcessBuilder pb = new ProcessBuilder(command);
+        pb.redirectErrorStream(true);
+        Process process = pb.start();
+
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                System.out.println("FFmpeg: " + line);
+            }
+        }
+
+        int exitCode = process.waitFor();
+        System.out.println("🔚 FFmpeg process exited with code: " + exitCode);
+
+        Path outputFile = Path.of(command.get(command.size() - 1));
+        boolean fileCreated = Files.exists(outputFile);
+        System.out.println(fileCreated
+                ? "✅ Output file created: " + outputFile
+                : "❌ Output file was NOT created: " + outputFile);
+    }
+}
+
