@@ -486,3 +486,62 @@ public class ResourceFileHelper {
     }
 }
 
+
+
+
+
+import java.io.*;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
+
+public class WebPConverter {
+
+    private static final String FFMPEG_BINARY = "ffmpeg"; // Ensure it's in system PATH
+
+    public static void convertToWebP(Path inputFile, Path outputFile, boolean lossless) throws IOException, InterruptedException {
+        System.out.println("🔍 Checking input file existence...");
+        if (!Files.exists(inputFile)) {
+            System.err.println("❌ Input file does not exist: " + inputFile);
+            return;
+        }
+        System.out.println("✅ Input file exists: " + inputFile);
+
+        // Ensure output directory exists
+        Files.createDirectories(outputFile.getParent());
+        System.out.println("📁 Output directory ensured: " + outputFile.getParent());
+
+        List<String> command = List.of(
+            FFMPEG_BINARY,
+            "-y", // Overwrite
+            "-i", inputFile.toString(),
+            "-c:v", "libwebp",
+            lossless ? "-lossless" : "-qscale",
+            lossless ? "1" : "75",
+            outputFile.toString()
+        );
+
+        System.out.println("🚀 Running FFmpeg with command:");
+        System.out.println(String.join(" ", command));
+
+        ProcessBuilder pb = new ProcessBuilder(command);
+        pb.redirectErrorStream(true);
+        Process process = pb.start();
+
+        // Read output stream
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                System.out.println("FFmpeg: " + line);
+            }
+        }
+
+        int exitCode = process.waitFor();
+        System.out.println("🔚 FFmpeg exited with code: " + exitCode);
+
+        boolean fileCreated = Files.exists(outputFile);
+        System.out.println(fileCreated
+                ? "✅ Output file successfully created: " + outputFile
+                : "❌ Output file not found after process: " + outputFile);
+    }
+}
