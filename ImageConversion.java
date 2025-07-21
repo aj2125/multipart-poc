@@ -131,3 +131,64 @@ Copy
 Edit
 ProcessBuilder pb = new ProcessBuilder("ffmpeg", ...);
 
+
+
+package com.example.util;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.file.*;
+
+public class ClasspathResourceExtractor {
+
+    private static final Path CACHE_DIR = Paths.get(System.getProperty("java.io.tmpdir"), "spring-image-cache");
+
+    /**
+     * Extracts a classpath resource to a physical file with its original name.
+     * Suitable for use with native tools like ffmpeg. Safe for deployment.
+     *
+     * @param resourcePath e.g. "/sample-data/input.png"
+     * @return Path to temp file
+     * @throws IOException if extraction fails
+     */
+    public static Path extractToTemp(String resourcePath) throws IOException {
+        if (!Files.exists(CACHE_DIR)) {
+            Files.createDirectories(CACHE_DIR);
+        }
+
+        String filename = Paths.get(resourcePath).getFileName().toString();
+        Path target = CACHE_DIR.resolve(filename);
+
+        try (InputStream is = ClasspathResourceExtractor.class.getResourceAsStream(resourcePath)) {
+            if (is == null) {
+                throw new IOException("Resource not found: " + resourcePath);
+            }
+
+            Files.copy(is, target, StandardCopyOption.REPLACE_EXISTING);
+            target.toFile().deleteOnExit(); // ensures cleanup on JVM exit
+            return target;
+        }
+    }
+
+    /**
+     * Optional: Clean up all files created by this utility manually.
+     */
+    public static void cleanUp() {
+        try (DirectoryStream<Path> stream = Files.newDirectoryStream(CACHE_DIR)) {
+            for (Path file : stream) {
+                Files.deleteIfExists(file);
+            }
+        } catch (IOException e) {
+            System.err.println("Cleanup failed: " + e.getMessage());
+        }
+    }
+}
+
+
+
+Path ffmpegInput = ClasspathResourceExtractor.extractToTemp("/sample-data/image.png");
+// Then use ffmpegInput.toAbsolutePath().toString()
+
+
+
+
