@@ -347,3 +347,99 @@ public class App {
 
 
 
+package com.example.util;
+
+import java.io.IOException;
+import java.nio.file.Path;
+
+public class AVIFConverter {
+
+    /**
+     * Converts the input image to AVIF (lossy).
+     */
+    public static Path convertToAVIFLossy(Path inputPath, String outputFilename) throws IOException, InterruptedException {
+        Path outputPath = OutputPathHelper.getOutputPath(outputFilename);
+
+        ProcessBuilder pb = new ProcessBuilder(
+                "ffmpeg",
+                "-i", inputPath.toString(),
+                "-c:v", "libaom-av1",
+                "-crf", "30", // Lower = better quality (e.g., 20–30 is decent lossy)
+                "-b:v", "0",  // Use CRF mode
+                outputPath.toString()
+        );
+        runProcess(pb);
+        return outputPath;
+    }
+
+    /**
+     * Converts the input image to AVIF (lossless).
+     */
+    public static Path convertToAVIFLossless(Path inputPath, String outputFilename) throws IOException, InterruptedException {
+        Path outputPath = OutputPathHelper.getOutputPath(outputFilename);
+
+        ProcessBuilder pb = new ProcessBuilder(
+                "ffmpeg",
+                "-i", inputPath.toString(),
+                "-c:v", "libaom-av1",
+                "-crf", "0",      // 0 = lossless
+                "-b:v", "0",      // Use constant quality mode
+                outputPath.toString()
+        );
+        runProcess(pb);
+        return outputPath;
+    }
+
+    /**
+     * Generates a thumbnail AVIF image (lossy).
+     */
+    public static Path convertToAVIFThumbnail(Path inputPath, String outputFilename, int width, int height) throws IOException, InterruptedException {
+        Path outputPath = OutputPathHelper.getOutputPath(outputFilename);
+
+        ProcessBuilder pb = new ProcessBuilder(
+                "ffmpeg",
+                "-i", inputPath.toString(),
+                "-vf", "scale=" + width + ":" + height,
+                "-c:v", "libaom-av1",
+                "-crf", "35",
+                "-b:v", "0",
+                outputPath.toString()
+        );
+        runProcess(pb);
+        return outputPath;
+    }
+
+    private static void runProcess(ProcessBuilder pb) throws IOException, InterruptedException {
+        pb.inheritIO(); // Optional: show FFmpeg logs in console
+        Process process = pb.start();
+        int exitCode = process.waitFor();
+        if (exitCode != 0) {
+            throw new RuntimeException("FFmpeg AVIF conversion failed. Exit code: " + exitCode);
+        }
+    }
+}
+
+
+
+
+import com.example.util.ResourceFileHelper;
+import com.example.util.AVIFConverter;
+import com.example.util.OutputPathHelper;
+
+import java.nio.file.Path;
+
+public class AVIFApp {
+    public static void main(String[] args) throws Exception {
+        OutputPathHelper.setCustomBasePath("C:/Users/AJ/output-images");
+
+        Path inputPath = ResourceFileHelper.getFileFromResources("sample-data/sample.png");
+
+        Path lossy = AVIFConverter.convertToAVIFLossy(inputPath, "image-lossy.avif");
+        Path lossless = AVIFConverter.convertToAVIFLossless(inputPath, "image-lossless.avif");
+        Path thumbnail = AVIFConverter.convertToAVIFThumbnail(inputPath, "image-thumb.avif", 200, 200);
+
+        System.out.println("Lossy: " + lossy);
+        System.out.println("Lossless: " + lossless);
+        System.out.println("Thumb: " + thumbnail);
+    }
+}
