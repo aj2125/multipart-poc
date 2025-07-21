@@ -443,3 +443,46 @@ public class AVIFApp {
         System.out.println("Thumb: " + thumbnail);
     }
 }
+
+
+
+
+package com.example.util;
+
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.file.*;
+
+public class ResourceFileHelper {
+
+    private static final String TEMP_DIR_PREFIX = "ffmpeg-input-";
+
+    /**
+     * Loads a file from the resources folder and creates a temp copy usable by FFmpeg.
+     *
+     * @param resourcePath Relative path inside src/main/resources (e.g., "sample-data/image.png")
+     * @return Path to the temp file that FFmpeg can read
+     * @throws IOException if file loading fails
+     */
+    public static Path getFileFromResources(String resourcePath) throws IOException {
+        ClassLoader classLoader = ResourceFileHelper.class.getClassLoader();
+        InputStream inputStream = classLoader.getResourceAsStream(resourcePath);
+        if (inputStream == null) {
+            throw new IllegalArgumentException("Resource not found: " + resourcePath);
+        }
+
+        // Create temp directory once per run (automatically deleted on exit)
+        Path tempDir = Files.createTempDirectory(TEMP_DIR_PREFIX);
+        tempDir.toFile().deleteOnExit();
+
+        // Copy resource to temp file
+        String filename = Paths.get(resourcePath).getFileName().toString();
+        Path tempFile = tempDir.resolve(filename);
+        Files.copy(inputStream, tempFile, StandardCopyOption.REPLACE_EXISTING);
+        tempFile.toFile().deleteOnExit();
+
+        return tempFile;
+    }
+}
+
