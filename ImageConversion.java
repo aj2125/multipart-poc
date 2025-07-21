@@ -635,3 +635,110 @@ public class WebPConverter {
     }
 }
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+import java.io.IOException;
+import java.nio.file.Path;
+
+public class WebPConverter {
+
+    /**
+     * Converts the input image to WebP (lossy).
+     */
+    public static Path convertToWebPLossy(Path inputPath, String outputFilename) throws IOException, InterruptedException {
+        Path outputPath = OutputPathHelper.getOutputPath(outputFilename);
+        System.out.println("Starting lossy WebP conversion...");
+        System.out.println("Input: " + inputPath);
+        System.out.println("Output: " + outputPath);
+
+        ProcessBuilder pb = new ProcessBuilder(
+                "ffmpeg",
+                "-i", inputPath.toString(),
+                "-qscale", "75",
+                outputPath.toString()
+        );
+        runProcess(pb);
+        return outputPath;
+    }
+
+    /**
+     * Converts the input image to WebP (lossless).
+     */
+    public static Path convertToWebPLossless(Path inputPath, String outputFilename) throws IOException, InterruptedException {
+        Path outputPath = OutputPathHelper.getOutputPath(outputFilename);
+        System.out.println("Starting lossless WebP conversion...");
+        System.out.println("Input: " + inputPath);
+        System.out.println("Output: " + outputPath);
+
+        ProcessBuilder pb = new ProcessBuilder(
+                "ffmpeg",
+                "-i", inputPath.toString(),
+                "-lossless", "1",
+                outputPath.toString()
+        );
+        runProcess(pb);
+        return outputPath;
+    }
+
+    /**
+     * Generates a thumbnail version of the input image as WebP (lossy).
+     */
+    public static Path convertToWebPThumbnail(Path inputPath, String outputFilename, int width, int height) throws IOException, InterruptedException {
+        Path outputPath = OutputPathHelper.getOutputPath(outputFilename);
+        System.out.println("Starting WebP thumbnail generation...");
+        System.out.println("Input: " + inputPath);
+        System.out.println("Output: " + outputPath);
+        System.out.println("Thumbnail size: " + width + "x" + height);
+
+        ProcessBuilder pb = new ProcessBuilder(
+                "ffmpeg",
+                "-i", inputPath.toString(),
+                "-vf", "scale=" + width + ":" + height,
+                "-qscale", "85",
+                outputPath.toString()
+        );
+        runProcess(pb);
+        return outputPath;
+    }
+
+    private static void runProcess(ProcessBuilder pb) throws IOException, InterruptedException {
+        pb.redirectErrorStream(true);
+        Process process = pb.start();
+
+        new Thread(() -> {
+            try (var reader = new java.io.BufferedReader(new java.io.InputStreamReader(process.getInputStream()))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    System.out.println("[FFmpeg] " + line);
+                }
+            } catch (IOException e) {
+                System.err.println("Error reading FFmpeg output: " + e.getMessage());
+            }
+        }).start();
+
+        int exitCode = process.waitFor();
+        if (exitCode != 0) {
+            throw new RuntimeException("FFmpeg failed with exit code: " + exitCode);
+        } else {
+            System.out.println("FFmpeg process completed successfully.");
+        }
+    }
+}
+
