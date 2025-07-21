@@ -192,3 +192,64 @@ Path ffmpegInput = ClasspathResourceExtractor.extractToTemp("/sample-data/image.
 
 
 
+package com.example.util;
+
+import java.io.IOException;
+import java.nio.file.*;
+
+public class OutputPathHelper {
+
+    // Change this to your desired directory if you want a fixed location
+    private static Path customBasePath = null;
+
+    // Default base path (safe temp dir)
+    private static final Path DEFAULT_BASE_PATH =
+            Paths.get(System.getProperty("java.io.tmpdir"), "spring-output-images");
+
+    /**
+     * Sets a custom output directory base.
+     * Example: setCustomBasePath("C:/Users/AJ/output-images");
+     */
+    public static void setCustomBasePath(String directoryPath) {
+        customBasePath = Paths.get(directoryPath).toAbsolutePath();
+    }
+
+    /**
+     * Returns the full path for an output file (creates parent dirs if needed).
+     */
+    public static Path getOutputPath(String filename) throws IOException {
+        Path base = (customBasePath != null) ? customBasePath : DEFAULT_BASE_PATH;
+
+        if (!Files.exists(base)) {
+            Files.createDirectories(base);
+        }
+
+        Path outputFile = base.resolve(filename);
+        outputFile.toFile().deleteOnExit(); // Optional cleanup
+        return outputFile;
+    }
+
+    public static String getCurrentOutputDir() {
+        return (customBasePath != null ? customBasePath : DEFAULT_BASE_PATH).toString();
+    }
+}
+
+
+
+// (Optional) Set custom path on your Windows machine:
+OutputPathHelper.setCustomBasePath("C:/Users/AJ/output-images");
+
+// Now generate output path
+Path outputPath = OutputPathHelper.getOutputPath("converted.webp");
+
+// Use it (e.g., in FFmpeg or file writing)
+System.out.println("Saving to: " + outputPath.toAbsolutePath());
+
+// You can pass outputPath.toString() into FFmpeg:
+ProcessBuilder pb = new ProcessBuilder(
+    "ffmpeg", "-i", inputPath.toString(), "-lossless", "1", outputPath.toString()
+);
+
+
+
+
