@@ -252,4 +252,98 @@ ProcessBuilder pb = new ProcessBuilder(
 
 
 
+package com.example.util;
+
+import java.io.IOException;
+import java.nio.file.Path;
+
+public class WebPConverter {
+
+    /**
+     * Converts the input image to WebP (lossy).
+     */
+    public static Path convertToWebPLossy(Path inputPath, String outputFilename) throws IOException, InterruptedException {
+        Path outputPath = OutputPathHelper.getOutputPath(outputFilename);
+
+        ProcessBuilder pb = new ProcessBuilder(
+                "ffmpeg",
+                "-i", inputPath.toString(),
+                "-qscale", "75", // Adjust quality level (0-100)
+                outputPath.toString()
+        );
+        runProcess(pb);
+        return outputPath;
+    }
+
+    /**
+     * Converts the input image to WebP (lossless).
+     */
+    public static Path convertToWebPLossless(Path inputPath, String outputFilename) throws IOException, InterruptedException {
+        Path outputPath = OutputPathHelper.getOutputPath(outputFilename);
+
+        ProcessBuilder pb = new ProcessBuilder(
+                "ffmpeg",
+                "-i", inputPath.toString(),
+                "-lossless", "1",
+                outputPath.toString()
+        );
+        runProcess(pb);
+        return outputPath;
+    }
+
+    /**
+     * Generates a thumbnail version of the input image as WebP (lossy).
+     */
+    public static Path convertToWebPThumbnail(Path inputPath, String outputFilename, int width, int height) throws IOException, InterruptedException {
+        Path outputPath = OutputPathHelper.getOutputPath(outputFilename);
+
+        ProcessBuilder pb = new ProcessBuilder(
+                "ffmpeg",
+                "-i", inputPath.toString(),
+                "-vf", "scale=" + width + ":" + height,
+                "-qscale", "85",
+                outputPath.toString()
+        );
+        runProcess(pb);
+        return outputPath;
+    }
+
+    private static void runProcess(ProcessBuilder pb) throws IOException, InterruptedException {
+        pb.inheritIO(); // Optional: show FFmpeg output in console
+        Process process = pb.start();
+        int exitCode = process.waitFor();
+        if (exitCode != 0) {
+            throw new RuntimeException("FFmpeg failed with exit code: " + exitCode);
+        }
+    }
+}
+
+
+
+import com.example.util.ResourceFileHelper;
+import com.example.util.WebPConverter;
+import com.example.util.OutputPathHelper;
+
+import java.nio.file.Path;
+
+public class App {
+    public static void main(String[] args) throws Exception {
+        // Optional: set custom output dir
+        OutputPathHelper.setCustomBasePath("C:/Users/AJ/output-images");
+
+        // Load sample input image from resources
+        Path inputPath = ResourceFileHelper.getFileFromResources("sample-data/sample.png");
+
+        // Convert to WebP
+        Path lossy = WebPConverter.convertToWebPLossy(inputPath, "image-lossy.webp");
+        Path lossless = WebPConverter.convertToWebPLossless(inputPath, "image-lossless.webp");
+        Path thumbnail = WebPConverter.convertToWebPThumbnail(inputPath, "image-thumb.webp", 200, 200);
+
+        System.out.println("Lossy: " + lossy);
+        System.out.println("Lossless: " + lossless);
+        System.out.println("Thumb: " + thumbnail);
+    }
+}
+
+
 
