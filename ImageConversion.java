@@ -742,3 +742,32 @@ public class WebPConverter {
     }
 }
 
+package com.example.util;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+
+/**
+ * Helper class to manage output image paths.
+ */
+public class OutputPathHelper {
+    private static Path customBasePath = Paths.get(System.getProperty("user.home"), "image-output");
+
+    /**
+     * Allows overriding the default base path where images are saved.
+     */
+    public static void setCustomBasePath(String customPath) {
+        customBasePath = Paths.get(customPath);
+    }
+
+    /**
+     * Returns a full path to a file inside the output directory.
+     * Creates the directory if it doesn't exist.
+     */
+    public static Path getOutputPath(String filename) throws IOException {
+        Files.createDirectories(customBasePath);
+        return customBasePath.resolve(filename);
+    }
+}
