@@ -67,3 +67,25 @@ public class ImageController {
 }
 
 
+ StreamingResponseBody body = outputStream -> {
+        byte[] buffer = new byte[8192];
+        int bytesRead;
+        try {
+            while ((bytesRead = imageStream.read(buffer)) != -1) {
+                outputStream.write(buffer, 0, bytesRead);
+                outputStream.flush();  // 🚀 critical
+            }
+        } finally {
+            imageStream.close();
+        }
+    };
+
+    final long timeEnded = System.currentTimeMillis();
+
+    return ResponseEntity.status(HttpStatus.OK)
+            .header(HttpHeaders.TRANSFER_ENCODING, "chunked")
+            .header("Accept-Ranges", "bytes")
+            .contentType(MediaType.APPLICATION_OCTET_STREAM)
+            .body(body);
+
+
