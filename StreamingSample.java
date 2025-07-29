@@ -135,3 +135,64 @@ return ResponseEntity.ok()
                 .ok()
                 .contentType(MediaType.APPLICATION_OCTET_STREAM)
                 .body(responseBody);
+
+
+
+
+@RestController
+@RequestMapping("/api/v1/images")
+public class ImageStreamController {
+
+    private final ImageService imageService;
+
+    public ImageStreamController(ImageService imageService) {
+        this.imageService = imageService;
+    }
+
+    @PostMapping(value = "/streamById", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
+    public ResponseEntity<StreamingResponseBody> streamImageById(
+            @RequestHeader("request-id") String requestId,
+            @RequestHeader("channel") String channel,
+            @RequestHeader("device-type") String deviceType,
+            @RequestBody ImageRequest imageRequest
+    ) {
+        log.info("Start streaming image for imageId: {}", imageRequest.getImageIdentifier());
+        final long startTime = System.currentTimeMillis();
+
+        InputStream imageStream = imageService.getImageStreamById(imageRequest);
+
+        try {
+            int available = imageStream.available();
+            log.info("Available bytes in image stream: {}", available);
+        } catch (IOException e) {
+            log.warn("Unable to determine available bytes in image stream", e);
+        }
+
+        StreamingResponseBody responseBody = outputStream -> {
+            byte[] buffer = new byte[8192];
+            int bytesRead;
+            long totalBytes = 0;
+
+            try {
+                while ((bytesRead = imageStream.read(buffer)) != -1) {
+                    outputStream.write(buffer, 0, bytesRead);
+                    outputStream.flush();
+                    totalBytes += bytesRead;
+                    log.info("Streamed {} bytes so far", totalBytes);
+                }
+            } finally {
+                imageStream.close();
+                log.info("Finished streaming. Total bytes sent: {}", totalBytes);
+            }
+        };
+
+        long elapsed = System.currentTimeMillis() - startTime;
+        log.info("Completed streaming in {} ms for imageId: {}", elapsed, imageRequest.getImageIdentifier());
+
+        return ResponseEntity.ok()
+                .header(HttpHeaders.TRANSFER_ENCODING, "chunked")
+                .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                .body(responseBody);
+    }
+}
+
