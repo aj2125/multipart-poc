@@ -231,3 +231,112 @@ StreamingResponseBody responseBody = outputStream -> {
                 .header(HttpHeaders.TRANSFER_ENCODING, "chunked")
                 .contentType(MediaType.APPLICATION_OCTET_STREAM)
                 .body(responseBody);
+
+
+
+
+
+
+
+
+
+
+
+//servlet modification
+
+
+
+
+@RestController
+@RequestMapping("/images")
+public class ImageController {
+
+    private final ImageService imageService;
+
+    public ImageController(ImageService imageService) {
+        this.imageService = imageService;
+    }
+
+    @GetMapping("/{imageId}")
+    public ResponseEntity<StreamingResponseBody> streamImage(@PathVariable String imageId) {
+        StreamingResponseBody streamBody = imageService.createStreamingResponse(imageId);
+        return ResponseEntity
+                .ok()
+                .header(HttpHeaders.TRANSFER_ENCODING, "chunked")
+                .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                .body(streamBody);
+    }
+}
+
+
+@Service
+public class ImageService {
+
+    private static final int BUFFER_SIZE = 8192;
+    private static final Logger logger = LoggerFactory.getLogger(ImageService.class);
+
+    public StreamingResponseBody createStreamingResponse(String imageId) {
+        InputStream imageStream = fetchImageStream(imageId);
+
+        // Setup headers early in the request lifecycle
+        setStreamingHeaders();
+
+        return outputStream -> {
+            long totalBytesSent = 0;
+            byte[] buffer = new byte[BUFFER_SIZE];
+
+            try (InputStream input = imageStream) {
+                int bytesRead;
+                while ((bytesRead = input.read(buffer)) != -1) {
+                    outputStream.write(buffer, 0, bytesRead);
+                    outputStream.flush();
+                    flushResponseToClient();
+                    totalBytesSent += bytesRead;
+                    logProgress(totalBytesSent);
+                }
+            } catch (IOException e) {
+                logger.warn("Failed during streaming: {}", e.getMessage(), e);
+            }
+
+            logger.info("Streaming complete. Total bytes sent: {}", totalBytesSent);
+        };
+    }
+
+    private InputStream fetchImageStream(String imageId) {
+        // Replace with real S3 logic
+        return new ByteArrayInputStream(new byte[0]); // Placeholder for demo
+    }
+
+    private void setStreamingHeaders() {
+        HttpServletResponse response = getCurrentHttpServletResponse();
+        if (response != null) {
+            response.setHeader(HttpHeaders.TRANSFER_ENCODING, "chunked");
+            response.setHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_OCTET_STREAM_VALUE);
+            response.setHeader(HttpHeaders.CACHE_CONTROL, "no-cache");
+            // Optional: remove conflicting headers
+            response.setHeader(HttpHeaders.CONTENT_LENGTH, null); // avoid "length + chunked" conflict
+        }
+    }
+
+    private void flushResponseToClient() {
+        HttpServletResponse response = getCurrentHttpServletResponse();
+        if (response != null) {
+            try {
+                response.flushBuffer();
+            } catch (IOException e) {
+                logger.warn("Flush to client failed: {}", e.getMessage(), e);
+            }
+        }
+    }
+
+    private HttpServletResponse getCurrentHttpServletResponse() {
+        ServletRequestAttributes attrs = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+        return attrs != null ? attrs.getResponse() : null;
+    }
+
+    private void logProgress(long bytesSent) {
+        logger.debug("Streamed {} bytes", bytesSent);
+    }
+}
+
+
