@@ -500,3 +500,18 @@ public void streamImage(
     }
 }
 
+
+
+
+try (InputStream imageStream = imageService.getStream(); 
+         OutputStream out = response.getOutputStream()) {
+
+        byte[] buffer = new byte[8192];
+        int bytesRead;
+
+        while ((bytesRead = imageStream.read(buffer)) != -1) {
+            out.write(buffer, 0, bytesRead);
+            out.flush();
+            response.flushBuffer(); // Triggers early transfer
+        }
+    }
