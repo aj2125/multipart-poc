@@ -1,0 +1,3 @@
+curl -v http://localhost:8080/your-base-path/v1/image/stream \
+  --output /dev/null \
+  --no-buffer
