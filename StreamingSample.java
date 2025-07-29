@@ -89,3 +89,14 @@ public class ImageController {
             .body(body);
 
 
+return ResponseEntity.ok()
+    .contentType(MediaType.APPLICATION_OCTET_STREAM)
+    .body((StreamingResponseBody) outputStream -> {
+        byte[] buffer = new byte[8192];
+        int bytesRead;
+        while ((bytesRead = imageStream.read(buffer)) != -1) {
+            outputStream.write(buffer, 0, bytesRead);
+        }
+        outputStream.flush();  // good practice
+        imageStream.close();   // optional but safe
+    });
