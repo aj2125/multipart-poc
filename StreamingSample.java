@@ -465,3 +465,38 @@ public ResponseEntity<StreamingResponseBody> streamImage(
             .body(responseBody);
 }
 
+
+
+
+
+@GetMapping("/streamImage")
+public void streamImage(
+        @RequestBody ImageRequest request,
+        HttpServletResponse response
+) {
+    try (InputStream imageStream = imageService.getImageInputStream(request);
+         OutputStream out = response.getOutputStream()) {
+
+        response.setContentType("application/octet-stream");
+        response.setHeader("Transfer-Encoding", "chunked");
+        response.setHeader("Cache-Control", "no-cache");
+
+        byte[] buffer = new byte[8192];
+        int bytesRead;
+        long totalBytes = 0;
+
+        while ((bytesRead = imageStream.read(buffer)) != -1) {
+            out.write(buffer, 0, bytesRead);
+            out.flush();          // Flush to servlet container
+            response.flushBuffer(); // Flush to client
+            totalBytes += bytesRead;
+        }
+
+        System.out.println("Finished streaming " + totalBytes + " bytes");
+
+    } catch (IOException e) {
+        System.err.println("Error streaming image: " + e.getMessage());
+        response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+    }
+}
+
