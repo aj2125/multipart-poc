@@ -340,3 +340,45 @@ public class ImageService {
 }
 
 
+@GetMapping("/api/image")
+public void streamImage(@RequestParam("id") String id, HttpServletResponse response) {
+    InputStream inputStream = null;
+
+    try {
+        // Fetch image stream from service layer
+        inputStream = imageService.getImageStream(id);
+
+        // Set response headers
+        response.setContentType(MediaType.APPLICATION_OCTET_STREAM_VALUE);
+        response.setHeader("Transfer-Encoding", "chunked");
+        response.setHeader("Cache-Control", "no-cache");
+
+        // Start writing the stream to response
+        OutputStream outputStream = response.getOutputStream();
+        byte[] buffer = new byte[8192];
+        int bytesRead;
+        long totalBytes = 0;
+
+        while ((bytesRead = inputStream.read(buffer)) != -1) {
+            outputStream.write(buffer, 0, bytesRead);
+            outputStream.flush();   // Flush to container buffer
+            response.flushBuffer(); // Force flush to client
+            totalBytes += bytesRead;
+            System.out.println("Streamed " + totalBytes + " bytes so far");
+        }
+
+        System.out.println("Finished streaming. Total bytes sent: " + totalBytes);
+
+    } catch (IOException e) {
+        e.printStackTrace();
+        response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+    } finally {
+        if (inputStream != null) {
+            try {
+                inputStream.close();
+            } catch (IOException ignored) {}
+        }
+    }
+}
+
+
