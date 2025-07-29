@@ -196,3 +196,38 @@ public class ImageStreamController {
     }
 }
 
+
+
+
+
+
+
+
+
+
+StreamingResponseBody responseBody = outputStream -> {
+            byte[] buffer = new byte[8192];
+            int bytesRead;
+            long totalBytes = 0;
+
+            try (imageStream) {
+                while ((bytesRead = imageStream.read(buffer)) != -1) {
+                    outputStream.write(buffer, 0, bytesRead);
+                    outputStream.flush();               // Flush to container buffer
+                    ((HttpServletResponse) ((ServletRequestAttributes) RequestContextHolder
+                        .getRequestAttributes()).getResponse()).flushBuffer();  // Force flush to client
+                    totalBytes += bytesRead;
+                    System.out.println("Streamed " + totalBytes + " bytes so far");
+                }
+            } catch (IOException e) {
+                System.err.println("Streaming error: " + e.getMessage());
+            }
+
+            System.out.println("Finished streaming. Total bytes sent: " + totalBytes);
+        };
+
+        return ResponseEntity
+                .ok()
+                .header(HttpHeaders.TRANSFER_ENCODING, "chunked")
+                .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                .body(responseBody);
