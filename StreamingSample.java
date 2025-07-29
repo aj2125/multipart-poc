@@ -382,3 +382,45 @@ public void streamImage(@RequestParam("id") String id, HttpServletResponse respo
 }
 
 
+
+
+
+
+
+
+
+
+
+@GetMapping(value = "/stream", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
+public ResponseEntity<StreamingResponseBody> streamImage(@RequestBody ImageRequest request) {
+
+    InputStream inputStream = imageService.getImageInputStream(request);
+
+    StreamingResponseBody stream = outputStream -> {
+        byte[] buffer = new byte[8192];
+        int bytesRead;
+        long totalBytes = 0;
+
+        try (inputStream) {
+            while ((bytesRead = inputStream.read(buffer)) != -1) {
+                outputStream.write(buffer, 0, bytesRead);
+                outputStream.flush();               // Flush to container
+                ((ServletRequestAttributes) RequestContextHolder
+                        .getRequestAttributes())
+                        .getResponse()
+                        .flushBuffer();            // Flush to client
+                totalBytes += bytesRead;
+            }
+        }
+
+        System.out.println("Finished streaming. Total bytes sent: " + totalBytes);
+    };
+
+    return ResponseEntity.ok()
+            .contentType(MediaType.APPLICATION_OCTET_STREAM)
+            // DO NOT SET Content-Length or Transfer-Encoding here
+            .cacheControl(CacheControl.noCache())
+            .body(stream);
+}
+
+
