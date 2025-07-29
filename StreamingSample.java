@@ -423,4 +423,45 @@ public ResponseEntity<StreamingResponseBody> streamImage(@RequestBody ImageReque
             .body(stream);
 }
 
+@GetMapping(value = "/streamImage", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
+public ResponseEntity<StreamingResponseBody> streamImage(
+        @RequestBody ImageRequest request,
+        HttpServletResponse response
+) {
+    InputStream inputStream;
+    try {
+        inputStream = imageService.getImageInputStream(request);
+    } catch (IOException e) {
+        throw new RuntimeException("Failed to get input stream", e);
+    }
+
+    // Set headers manually on the servlet response
+    response.setContentType(MediaType.APPLICATION_OCTET_STREAM_VALUE);
+    response.setHeader("Transfer-Encoding", "chunked");
+    response.setHeader("Cache-Control", "no-cache");
+
+    StreamingResponseBody responseBody = outputStream -> {
+        byte[] buffer = new byte[8192];
+        int bytesRead;
+        long totalBytes = 0;
+
+        try (inputStream) {
+            while ((bytesRead = inputStream.read(buffer)) != -1) {
+                outputStream.write(buffer, 0, bytesRead);
+                outputStream.flush();               // Flush to container buffer
+                response.flushBuffer();             // Flush to client
+                totalBytes += bytesRead;
+            }
+        } catch (IOException e) {
+            System.err.println("Error while streaming: " + e.getMessage());
+        }
+
+        System.out.println("Finished streaming. Total bytes sent: " + totalBytes);
+    };
+
+    // Return body without adding transfer-encoding again
+    return ResponseEntity
+            .ok()
+            .body(responseBody);
+}
 
