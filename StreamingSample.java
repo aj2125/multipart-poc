@@ -100,3 +100,38 @@ return ResponseEntity.ok()
         outputStream.flush();  // good practice
         imageStream.close();   // optional but safe
     });
+
+
+
+
+
+
+
+
+        StreamingResponseBody responseBody = outputStream -> {
+            byte[] buffer = new byte[8192];
+            int bytesRead;
+            while ((bytesRead = imageStream.read(buffer)) != -1) {
+                outputStream.write(buffer, 0, bytesRead);
+                outputStream.flush();  // ✅ Critical to avoid buffering delay
+            }
+            imageStream.close();
+        };
+
+        long timeEnded = System.currentTimeMillis();
+        log.info("Stream setup done in {}ms for UUID {}", (timeEnded - timeStarted), );
+
+        // ✅ Optional: force commit response on some servlet engines
+        try {
+            HttpServletResponse rawResponse = ((ServletRequestAttributes) RequestContextHolder
+                    .getRequestAttributes())
+                    .getResponse();
+            if (rawResponse != null) rawResponse.flushBuffer();
+        } catch (Exception e) {
+            log.warn("Could not flush servlet buffer", e);
+        }
+
+        return ResponseEntity
+                .ok()
+                .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                .body(responseBody);
