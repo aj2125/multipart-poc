@@ -1,0 +1,43 @@
+ You won’t get constant off-tracks; edge behavior is now safer. Training should converge to ~18.5–19.0s with 3h.
+
+ The gentle-turn shaping is overly cautious → you’re capped at ~4.0 m/s in sections where you could carry ~4.2. This is the main thing holding you from the 17s target.
+
+ Loosen GENTLE_CORNER_SPEED (from 4.1 → 4.2) and narrow the gentle band (reduce threshold from 4.5 → 3.8). That will reclassify more arcs as “straights” and let you push speed without wobble.
+
+ 
+
+
+
+
+# Neural Network & Training
+Gradient descent batch size: 64  # Better for fresh start
+Number of epochs: 10
+Learning rate: 0.00025
+Discount factor: 0.995
+Entropy: 0.01
+Epsilon greedy: 1.0
+Loss type: Huber
+
+# Experience Settings
+Episodes between training: 20
+Number of experience episodes: 40
+
+
+Action space type: Discrete
+
+Steering angles: 
+  [-30, -25, -20, -15, -10, -7, -3, 0, 3, 7, 10, 15, 20, 25, 30]
+  # 15 angles - more left options for CCW hairpins
+
+Speed values:
+  [1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.2]
+  # 7 speeds - starts low for learning
+
+Total actions: 105 (15 × 7)
+
+
+
+Track: AWS DeepRacer Championship Cup 2019
+Direction: Counter-Clockwise
+Training time: 180 minutes
+Number of workers: 4
